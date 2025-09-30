@@ -102,6 +102,7 @@ CONFIG_KEYS = [
     "WAKE_WORD_SENSITIVITY",
     "WAKE_WORD_THRESHOLD",
     "WAKE_WORD_ENDPOINT",
+    "WAKE_WORD_PORCUPINE_ACCESS_KEY",
 ]
 ALLOW_RC_TAGS = os.getenv("ALLOW_RC_TAGS", "false").lower() == "true"
 WEBCONFIG_DIR = os.path.abspath(os.path.dirname(__file__))
@@ -625,6 +626,9 @@ def wake_word_status():
             "sensitivity": core_config.WAKE_WORD_SENSITIVITY,
             "threshold": core_config.WAKE_WORD_THRESHOLD,
             "endpoint": core_config.WAKE_WORD_ENDPOINT,
+            "porcupine_access_key_present": bool(
+                core_config.WAKE_WORD_PORCUPINE_ACCESS_KEY
+            ),
             "session_active": False,
             "last_error": "controller unavailable",
             "events_pending": 0,
@@ -697,6 +701,9 @@ def wake_word_runtime_config():
             updates["threshold"] = float(data["threshold"])
         except (TypeError, ValueError):
             pass
+
+    if "porcupine_access_key" in data:
+        updates["porcupine_access_key"] = str(data["porcupine_access_key"] or "")
 
     if not updates:
         return jsonify({"status": "ignored", "reason": "no valid parameters"}), 400

@@ -540,6 +540,20 @@
                                     For OpenWakeWord, point this to the downloaded wake-word model file (e.g. <code>/home/pi/models/hey_billy.onnx</code>). Leave blank unless required.
                                 </p>
                             </div>
+
+                            <div class="md:col-span-2">
+                                <label for="WAKE_WORD_PORCUPINE_ACCESS_KEY" class="block font-semibold text-sm text-slate-300">
+                                    Porcupine Access Key
+                                </label>
+                                <input type="password" id="WAKE_WORD_PORCUPINE_ACCESS_KEY" name="WAKE_WORD_PORCUPINE_ACCESS_KEY"
+                                       placeholder="pvx_..."
+                                       value="{{ config.get('WAKE_WORD_PORCUPINE_ACCESS_KEY', '') }}"
+                                       autocomplete="off"
+                                       class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                                <p class="text-xs text-slate-400 mt-1">
+                                    Required by Picovoice Porcupine. Grab it from the Picovoice Console and keep it private.
+                                </p>
+                            </div>
                         </div>
 
                         <div class="grid gap-4 md:grid-cols-2">

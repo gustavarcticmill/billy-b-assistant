@@ -115,6 +115,10 @@ WAKE_WORD_ENGINE = os.getenv("WAKE_WORD_ENGINE", "openwakeword").strip()
 WAKE_WORD_SENSITIVITY = _float_env("WAKE_WORD_SENSITIVITY", "0.5")
 WAKE_WORD_THRESHOLD = _float_env("WAKE_WORD_THRESHOLD", "2400")
 WAKE_WORD_ENDPOINT = os.getenv("WAKE_WORD_ENDPOINT", "").strip()
+WAKE_WORD_PORCUPINE_ACCESS_KEY = (
+    os.getenv("WAKE_WORD_PORCUPINE_ACCESS_KEY")
+    or os.getenv("PICOVOICE_ACCESS_KEY", "")
+).strip()
 
 # === GPIO Config ===
 BUTTON_PIN = int(os.getenv("BUTTON_PIN", "27"))

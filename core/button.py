@@ -157,6 +157,7 @@ def start_loop():
         sensitivity=config.WAKE_WORD_SENSITIVITY,
         threshold=config.WAKE_WORD_THRESHOLD,
         endpoint=config.WAKE_WORD_ENDPOINT,
+        porcupine_access_key=config.WAKE_WORD_PORCUPINE_ACCESS_KEY,
     )
 
     if config.WAKE_WORD_ENABLED:

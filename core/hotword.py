@@ -57,6 +57,7 @@ class WakeWordController:
         self.sensitivity = self._clamp_sensitivity(config.WAKE_WORD_SENSITIVITY)
         self.threshold = max(config.WAKE_WORD_THRESHOLD, 0.0)
         self.endpoint = config.WAKE_WORD_ENDPOINT
+        self.porcupine_access_key = config.WAKE_WORD_PORCUPINE_ACCESS_KEY
 
         self._stream: sd.InputStream | None = None
         self._running = False
@@ -116,6 +117,7 @@ class WakeWordController:
         sensitivity: Optional[float] = None,
         threshold: Optional[float] = None,
         endpoint: Optional[str] = None,
+        porcupine_access_key: Optional[str] = None,
     ) -> None:
         with self._lock:
             if enabled is not None:
@@ -132,6 +134,11 @@ class WakeWordController:
             if endpoint is not None and endpoint != self.endpoint:
                 self.endpoint = endpoint
                 restart_required = True
+            if porcupine_access_key is not None:
+                new_key = str(porcupine_access_key).strip()
+                if new_key != self.porcupine_access_key:
+                    self.porcupine_access_key = new_key
+                    restart_required = True
 
             if restart_required and self._running:
                 self._close_stream()
@@ -146,6 +153,7 @@ class WakeWordController:
                 "sensitivity": self.sensitivity,
                 "threshold": self.threshold,
                 "endpoint": self.endpoint,
+                "porcupine_access_key_present": bool(self.porcupine_access_key),
                 "session_active": self._session_active,
                 "last_error": self._last_error,
                 "events_pending": self._event_queue.qsize(),
@@ -302,10 +310,18 @@ class WakeWordController:
             if not os.path.exists(keyword_path):
                 raise RuntimeError(f"Porcupine keyword not found: {keyword_path}")
 
+            access_key = (self.porcupine_access_key or "").strip()
+            if not access_key:
+                raise RuntimeError(
+                    "WAKE_WORD_PORCUPINE_ACCESS_KEY must be set when engine=porcupine"
+                )
+
             sensitivity = self._clamp_sensitivity(self.sensitivity)
             try:
                 self._porcupine = pvporcupine.create(
-                    keyword_paths=[keyword_path], sensitivities=[sensitivity]
+                    access_key=access_key,
+                    keyword_paths=[keyword_path],
+                    sensitivities=[sensitivity],
                 )
             except Exception as exc:  # noqa: BLE001
                 raise RuntimeError(f"Failed to load Porcupine keyword: {exc}") from exc

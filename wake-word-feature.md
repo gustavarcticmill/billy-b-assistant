@@ -15,7 +15,7 @@
 ## Backend Workstreams
 
 ### 1. Configuration and State Management
-- Add new env keys (e.g., `WAKE_WORD_ENABLED`, `WAKE_WORD_ENGINE`, `WAKE_WORD_SENSITIVITY`, `WAKE_WORD_THRESHOLD`, `WAKE_WORD_ENDPOINT`) with sane defaults.
+- Add new env keys (e.g., `WAKE_WORD_ENABLED`, `WAKE_WORD_ENGINE`, `WAKE_WORD_SENSITIVITY`, `WAKE_WORD_THRESHOLD`, `WAKE_WORD_ENDPOINT`, `WAKE_WORD_PORCUPINE_ACCESS_KEY`) with sane defaults.
 - Extend `core/config.py` so the new keys are exposed through `core.config` and available to both the listener and the web UI server.
 - Update `webconfig/server.py` to include the new keys in `CONFIG_KEYS`, `/config`, and `/save` routes.
 - Decide where runtime state lives (e.g., a small `WakeWordController` singleton) to enable toggling the listener without restarting the whole app.

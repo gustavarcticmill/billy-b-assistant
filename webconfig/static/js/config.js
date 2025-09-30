@@ -307,6 +307,10 @@ const SettingsForm = (() => {
                 if (endpointInput) {
                     payload["WAKE_WORD_ENDPOINT"] = endpointInput.value || "";
                 }
+                const accessKeyInput = document.getElementById("WAKE_WORD_PORCUPINE_ACCESS_KEY");
+                if (accessKeyInput) {
+                    payload["WAKE_WORD_PORCUPINE_ACCESS_KEY"] = accessKeyInput.value.trim();
+                }
             }
 
             const flaskPortInput = document.getElementById("FLASK_PORT");
@@ -1043,6 +1047,9 @@ const WakeWordPanel = (() => {
             if (status.engine === "porcupine" && status.porcupine_available === false) {
                 errorMessages.push("Install the 'pvporcupine' package and provide a .ppn keyword file.");
             }
+            if (status.engine === "porcupine" && status.porcupine_access_key_present === false) {
+                errorMessages.push("Add your Picovoice Access Key to use the Porcupine engine.");
+            }
             if (!controllerAvailable) {
                 errorMessages.push("Web UI cannot reach the live wake word controller. Changes will apply after restarting Billy.");
             } else if (!hardwareEnabled) {
@@ -1081,6 +1088,10 @@ const WakeWordPanel = (() => {
         elements.endpointInput?.addEventListener("blur", () => {
             applyRuntimeConfig({endpoint: elements.endpointInput.value || ""}, {silent: true});
         });
+        elements.accessKeyInput?.addEventListener("change", () => {
+            const value = elements.accessKeyInput.value ? elements.accessKeyInput.value.trim() : "";
+            applyRuntimeConfig({porcupine_access_key: value}, {silent: true});
+        });
         elements.simulateBtn?.addEventListener("click", () => runTestAction("simulate"));
         elements.stopBtn?.addEventListener("click", () => runTestAction("stop"));
         elements.refreshBtn?.addEventListener("click", () => fetchEvents(true));
@@ -1097,6 +1108,7 @@ const WakeWordPanel = (() => {
             sensitivityInput: document.getElementById("WAKE_WORD_SENSITIVITY"),
             thresholdInput: document.getElementById("WAKE_WORD_THRESHOLD"),
             endpointInput: document.getElementById("WAKE_WORD_ENDPOINT"),
+            accessKeyInput: document.getElementById("WAKE_WORD_PORCUPINE_ACCESS_KEY"),
             statusBadge: document.getElementById("wake-word-state-badge"),
             statusDetail: document.getElementById("wake-word-status-detail"),
             lastError: document.getElementById("wake-word-last-error"),
