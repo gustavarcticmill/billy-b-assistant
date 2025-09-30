@@ -343,53 +343,62 @@ class WakeWordController:
         if chunk.size == 0:
             return
 
-        try:
-            scores = self._oww_model.predict(chunk)
-        except Exception as exc:  # noqa: BLE001
-            self._publish_event("error", message=f"OpenWakeWord inference failed: {exc}")
-            self._last_error = str(exc)
-            return
+        self._oww_buffer = np.concatenate((self._oww_buffer, chunk))
 
-        self._oww_last_scores = scores or {}
-        if config.DEBUG_MODE:
-            debug_scores = {
-                key: round(float(value), 4) for key, value in self._oww_last_scores.items()
-            }
-            print(
-                f"[wake-word] scores={debug_scores} len={len(chunk)} sensitivity={self.sensitivity:.2f}"
+        updated = False
+        while self._oww_buffer.size >= self._oww_frame_len:
+            frame = self._oww_buffer[: self._oww_frame_len]
+            self._oww_buffer = self._oww_buffer[self._oww_frame_hop :]
+
+            try:
+                scores = self._oww_model.predict(frame)
+            except Exception as exc:  # noqa: BLE001
+                self._publish_event("error", message=f"OpenWakeWord inference failed: {exc}")
+                self._last_error = str(exc)
+                return
+
+            self._oww_last_scores = scores or {}
+            if config.DEBUG_MODE:
+                debug_scores = {
+                    key: round(float(value), 4) for key, value in self._oww_last_scores.items()
+                }
+                print(
+                    f"[wake-word] scores={debug_scores} frame_len={len(frame)} sensitivity={self.sensitivity:.2f}"
+                )
+            if self._oww_last_scores:
+                best_label, best_score = max(
+                    self._oww_last_scores.items(), key=lambda item: item[1]
+                )
+            else:
+                best_label, best_score = None, 0.0
+
+            self._publish_event(
+                "scores",
+                payload={
+                    "scores": self._oww_last_scores,
+                    "best_label": best_label,
+                    "best_score": best_score,
+                },
             )
-        if self._oww_last_scores:
-            best_label, best_score = max(
-                self._oww_last_scores.items(), key=lambda item: item[1]
-            )
-        else:
-            best_label, best_score = None, 0.0
 
-        self._publish_event(
-            "scores",
-            payload={
-                "scores": self._oww_last_scores,
-                "best_label": best_label,
-                "best_score": best_score,
-            },
-        )
+            if best_score >= self.sensitivity and (
+                (timestamp - self._last_detection) >= self.cooldown_seconds
+            ):
+                self._last_detection = timestamp
+                payload = {
+                    "engine": self.engine,
+                    "mode": self._detector_mode,
+                    "label": best_label,
+                    "score": float(best_score),
+                    "scores": self._oww_last_scores,
+                }
+                self._publish_event("detected", payload=payload)
+                self._dispatch_detection(payload)
 
-        if best_score < self.sensitivity:
+            updated = True
+
+        if not updated:
             return
-
-        if (timestamp - self._last_detection) < self.cooldown_seconds:
-            return
-
-        self._last_detection = timestamp
-        payload = {
-            "engine": self.engine,
-            "mode": self._detector_mode,
-            "label": best_label,
-            "score": float(best_score),
-            "scores": self._oww_last_scores,
-        }
-        self._publish_event("detected", payload=payload)
-        self._dispatch_detection(payload)
 
     def _publish_event(
         self,
