@@ -995,13 +995,17 @@ const WakeWordPanel = (() => {
                 throw new Error(status.error || "Failed to fetch status");
             }
 
+            const controllerAvailable = status.controller_available !== false;
             const enabled = Boolean(status.enabled);
             setToggle(enabled);
 
             let badgeLabel = "Disabled";
             let badgeColor = {text: "text-slate-300", border: "border-zinc-700"};
 
-            if (status.last_error) {
+            if (!controllerAvailable) {
+                badgeLabel = "Unavailable";
+                badgeColor = {text: "text-amber-300", border: "border-amber-500"};
+            } else if (status.last_error) {
                 badgeLabel = "Error";
                 badgeColor = {text: "text-rose-400", border: "border-rose-500"};
             } else if (enabled && status.running) {
@@ -1014,7 +1018,9 @@ const WakeWordPanel = (() => {
 
             setBadge(badgeLabel, badgeColor.text, badgeColor.border);
             if (elements.statusDetail) {
-                elements.statusDetail.textContent = describeStatus(status);
+                elements.statusDetail.textContent = controllerAvailable
+                    ? describeStatus(status)
+                    : "Wake word controller is managed by the Billy service. Restart Billy after saving settings.";
             }
             const errorMessages = [];
             if (status.last_error) {
@@ -1025,6 +1031,9 @@ const WakeWordPanel = (() => {
             }
             if (status.engine === "openwakeword" && status.oww_available === false) {
                 errorMessages.push("Install the 'openwakeword' package to use this engine.");
+            }
+            if (!controllerAvailable) {
+                errorMessages.push("Web UI cannot reach the live wake word controller. Changes will apply after restarting Billy.");
             }
             updateError(errorMessages.join(" | "));
         } catch (err) {

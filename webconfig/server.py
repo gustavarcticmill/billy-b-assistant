@@ -33,15 +33,34 @@ from scipy.signal import resample
 # Project setup
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from core import config as core_config
-from core.hotword import OpenWakeWordModel, _OWW_AVAILABLE
-from core.hotword import controller as wake_word_controller
 from core.wakeup import generate_wake_clip_async
+
+try:
+    from core.hotword import controller as wake_word_controller
+except Exception as err:  # noqa: BLE001
+    wake_word_controller = None
+    print(f"[wake-word] Controller unavailable: {err}")
+
+try:
+    from openwakeword.model import Model as OpenWakeWordModel
+
+    _OWW_AVAILABLE = True
+except Exception as err:  # noqa: BLE001
+    OpenWakeWordModel = None
+    _OWW_AVAILABLE = False
+    print(f"[wake-word] OpenWakeWord unavailable: {err}")
 
 try:
     from core import button as button_controller
 except Exception as err:  # noqa: BLE001
     button_controller = None
     print(f"[wake-word] Button controller unavailable: {err}")
+
+if wake_word_controller is not None:
+    try:
+        wake_word_controller.set_hardware_enabled(False)
+    except Exception as err:  # noqa: BLE001
+        print(f"[wake-word] Failed to disable controller hardware: {err}")
 
 
 executor = ThreadPoolExecutor(max_workers=2)
@@ -574,13 +593,34 @@ def get_config():
 
 @app.route("/wake-word/status")
 def wake_word_status():
+    if wake_word_controller is None:
+        return jsonify({
+            "enabled": core_config.WAKE_WORD_ENABLED,
+            "running": False,
+            "engine": core_config.WAKE_WORD_ENGINE,
+            "sensitivity": core_config.WAKE_WORD_SENSITIVITY,
+            "threshold": core_config.WAKE_WORD_THRESHOLD,
+            "endpoint": core_config.WAKE_WORD_ENDPOINT,
+            "session_active": False,
+            "last_error": "controller unavailable",
+            "events_pending": 0,
+            "detector_mode": "unknown",
+            "oww_available": _OWW_AVAILABLE,
+            "hardware_enabled": False,
+            "controller_available": False,
+            "button_controller_available": button_controller is not None,
+        })
+
     status = wake_word_controller.get_status()
+    status["controller_available"] = True
     status["button_controller_available"] = button_controller is not None
     return jsonify(status)
 
 
 @app.route("/wake-word/events")
 def wake_word_events():
+    if wake_word_controller is None:
+        return jsonify({"events": [], "controller_available": False})
     events = []
     event_queue = wake_word_controller.get_event_queue()
     while len(events) < 50:
@@ -594,6 +634,11 @@ def wake_word_events():
 
 @app.route("/wake-word/runtime-config", methods=["POST"])
 def wake_word_runtime_config():
+    if wake_word_controller is None:
+        return (
+            jsonify({"status": "unavailable", "error": "Wake word controller not running"}),
+            503,
+        )
     data = request.json or {}
 
     def _maybe_bool(value):
@@ -646,9 +691,9 @@ def wake_word_runtime_config():
 
 @app.route("/wake-word/test", methods=["POST"])
 def wake_word_test():
-    if button_controller is None:
+    if button_controller is None or wake_word_controller is None:
         return (
-            jsonify({"error": "button controller unavailable on this host"}),
+            jsonify({"error": "wake word test unavailable on this host"}),
             503,
         )
 
@@ -1098,7 +1143,8 @@ def wake_word_calibrate_apply():
             for key, value in updates_env.items():
                 set_key(ENV_PATH, key, value)
 
-        wake_word_controller.set_parameters(**updates_runtime)
+        if wake_word_controller is not None:
+            wake_word_controller.set_parameters(**updates_runtime)
 
         if "threshold" in updates_runtime:
             core_config.WAKE_WORD_THRESHOLD = updates_runtime["threshold"]

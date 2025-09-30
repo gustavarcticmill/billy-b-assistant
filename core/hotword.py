@@ -3,13 +3,16 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, Optional, TYPE_CHECKING
 
 import numpy as np
 import sounddevice as sd
 from scipy.signal import resample
 
-from . import audio, config
+from . import config
+
+if TYPE_CHECKING:  # pragma: no cover - only for static analysis
+    from . import audio as audio_module
 
 try:  # Optional dependency, loaded when engine=openwakeword.
     from openwakeword.model import Model as OpenWakeWordModel
@@ -60,6 +63,7 @@ class WakeWordController:
         self._oww_model: OpenWakeWordModel | None = None
         self._oww_required_rate = 16000
         self._oww_last_scores: dict[str, float] | None = None
+        self._hardware_enabled = True
 
     def set_detection_callback(self, callback: WakeWordCallback | None) -> None:
         with self._lock:
@@ -131,6 +135,7 @@ class WakeWordController:
                 "events_pending": self._event_queue.qsize(),
                 "detector_mode": self._detector_mode,
                 "oww_available": _OWW_AVAILABLE,
+                "hardware_enabled": self._hardware_enabled,
             }
 
     def get_event_queue(self) -> "queue.Queue[WakeWordEvent]":
@@ -143,7 +148,7 @@ class WakeWordController:
         return min(max(value, 0.0), 1.0)
 
     def _sync_stream_state(self) -> None:
-        should_run = self.enabled and not self._session_active
+        should_run = self.enabled and self._hardware_enabled and not self._session_active
         if should_run and not self._running:
             self._open_stream()
         elif not should_run and self._running:
@@ -151,18 +156,19 @@ class WakeWordController:
 
     def _open_stream(self) -> None:
         try:
-            if audio.MIC_DEVICE_INDEX is None:
-                audio.detect_devices(debug=config.DEBUG_MODE)
+            audio_mod = self._get_audio_module()
+            if audio_mod.MIC_DEVICE_INDEX is None:
+                audio_mod.detect_devices(debug=config.DEBUG_MODE)
 
-            channels = max(1, audio.MIC_CHANNELS or 1)
-            samplerate = audio.MIC_RATE or 16000
-            blocksize = audio.CHUNK_SIZE or int(samplerate * config.CHUNK_MS / 1000)
+            channels = max(1, audio_mod.MIC_CHANNELS or 1)
+            samplerate = audio_mod.MIC_RATE or 16000
+            blocksize = audio_mod.CHUNK_SIZE or int(samplerate * config.CHUNK_MS / 1000)
 
             self._prepare_engine()
 
             self._stream = sd.InputStream(
                 samplerate=samplerate,
-                device=audio.MIC_DEVICE_INDEX,
+                device=audio_mod.MIC_DEVICE_INDEX,
                 channels=channels,
                 dtype="int16",
                 blocksize=blocksize,
@@ -198,6 +204,7 @@ class WakeWordController:
             self._stream = None
             self._running = False
             self._publish_event("status", message="listener_stopped")
+            self._input_samplerate = None
 
     def _prepare_engine(self) -> None:
         self._oww_model = None
@@ -397,6 +404,30 @@ class WakeWordController:
             callback(payload)
         except Exception as exc:  # noqa: BLE001
             print(f"⚠️ Wake word callback failed: {exc}")
+
+    _audio_module = None
+
+    @classmethod
+    def _get_audio_module(cls):
+        if cls._audio_module is None:
+            from . import audio as audio_module
+
+            cls._audio_module = audio_module
+        return cls._audio_module
+
+    def set_hardware_enabled(self, enabled: bool) -> None:
+        with self._lock:
+            enabled_flag = bool(enabled)
+            if enabled_flag == self._hardware_enabled:
+                return
+            self._hardware_enabled = enabled_flag
+            if not enabled_flag and self._running:
+                self._close_stream()
+            self._publish_event(
+                "status",
+                message="hardware_enabled" if enabled_flag else "hardware_disabled",
+                payload={"hardware_enabled": enabled_flag},
+            )
 
 
 controller = WakeWordController()
