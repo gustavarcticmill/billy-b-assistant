@@ -28,6 +28,7 @@ from flask import (
 from packaging.version import InvalidVersion
 from packaging.version import parse as parse_version
 from scipy.signal import resample
+from typing import Any
 
 
 # Project setup
@@ -46,7 +47,7 @@ try:
 
     _OWW_AVAILABLE = True
 except Exception as err:  # noqa: BLE001
-    OpenWakeWordModel = None
+    OpenWakeWordModel = Any  # type: ignore[assignment]
     _OWW_AVAILABLE = False
     print(f"[wake-word] OpenWakeWord unavailable: {err}")
 

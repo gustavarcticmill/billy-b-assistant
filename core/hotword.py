@@ -3,7 +3,7 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
-from typing import Callable, Optional, TYPE_CHECKING
+from typing import Any, Callable, Optional, TYPE_CHECKING
 
 import numpy as np
 import sounddevice as sd
@@ -19,7 +19,7 @@ try:  # Optional dependency, loaded when engine=openwakeword.
 
     _OWW_AVAILABLE = True
 except Exception:  # noqa: BLE001 - handled gracefully in controller.
-    OpenWakeWordModel = None
+    OpenWakeWordModel = Any  # type: ignore[assignment]
     _OWW_AVAILABLE = False
 
 
