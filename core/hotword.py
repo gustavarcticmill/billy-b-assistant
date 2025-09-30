@@ -66,6 +66,7 @@ class WakeWordController:
         self._hardware_enabled = True
         self._oww_buffer = np.zeros(0, dtype=np.float32)
         self._oww_frame_len = int(self._oww_required_rate * 0.08)
+        self._oww_frame_hop = max(int(self._oww_required_rate * 0.04), 1)
 
     def set_detection_callback(self, callback: WakeWordCallback | None) -> None:
         with self._lock:
@@ -249,6 +250,7 @@ class WakeWordController:
         else:
             self._oww_required_rate = 16000
         self._oww_frame_len = max(int(self._oww_required_rate * 0.08), 1)
+        self._oww_frame_hop = max(int(self._oww_required_rate * 0.04), 1)
         self._oww_buffer = np.zeros(0, dtype=np.float32)
 
         self._detector_mode = "openwakeword"
@@ -337,7 +339,7 @@ class WakeWordController:
         updated = False
         while self._oww_buffer.size >= self._oww_frame_len:
             frame = self._oww_buffer[: self._oww_frame_len]
-            self._oww_buffer = self._oww_buffer[self._oww_frame_len :]
+            self._oww_buffer = self._oww_buffer[self._oww_frame_hop :]
 
             try:
                 scores = self._oww_model.predict(frame)
