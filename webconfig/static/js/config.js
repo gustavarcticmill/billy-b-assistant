@@ -1040,6 +1040,9 @@ const WakeWordPanel = (() => {
             if (status.engine === "openwakeword" && status.oww_available === false) {
                 errorMessages.push("Install the 'openwakeword' package to use this engine.");
             }
+            if (status.engine === "porcupine" && status.porcupine_available === false) {
+                errorMessages.push("Install the 'pvporcupine' package and provide a .ppn keyword file.");
+            }
             if (!controllerAvailable) {
                 errorMessages.push("Web UI cannot reach the live wake word controller. Changes will apply after restarting Billy.");
             } else if (!hardwareEnabled) {

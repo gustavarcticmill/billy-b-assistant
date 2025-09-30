@@ -3,6 +3,7 @@ import queue
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Callable, Optional, TYPE_CHECKING
 
 import numpy as np
@@ -21,6 +22,14 @@ try:  # Optional dependency, loaded when engine=openwakeword.
 except Exception:  # noqa: BLE001 - handled gracefully in controller.
     OpenWakeWordModel = Any  # type: ignore[assignment]
     _OWW_AVAILABLE = False
+
+try:  # Optional dependency for Porcupine support
+    import pvporcupine
+
+    _PORCUPINE_AVAILABLE = True
+except Exception:
+    pvporcupine = None
+    _PORCUPINE_AVAILABLE = False
 
 
 WakeWordCallback = Callable[[dict], None]
@@ -67,6 +76,10 @@ class WakeWordController:
         self._oww_buffer = np.zeros(0, dtype=np.float32)
         self._oww_frame_len = int(self._oww_required_rate * 0.08)
         self._oww_frame_hop = max(int(self._oww_required_rate * 0.04), 1)
+        self._porcupine = None
+        self._porcupine_buffer = np.zeros(0, dtype=np.int16)
+        self._porcupine_frame_len = 0
+        self._porcupine_keywords: list[str] = []
 
     def set_detection_callback(self, callback: WakeWordCallback | None) -> None:
         with self._lock:
@@ -138,6 +151,7 @@ class WakeWordController:
                 "events_pending": self._event_queue.qsize(),
                 "detector_mode": self._detector_mode,
                 "oww_available": _OWW_AVAILABLE,
+                "porcupine_available": _PORCUPINE_AVAILABLE,
                 "hardware_enabled": self._hardware_enabled,
             }
 
@@ -217,57 +231,100 @@ class WakeWordController:
         self._oww_model = None
         self._detector_mode = "rms"
         self._oww_last_scores = None
+        self._porcupine = None
+        self._porcupine_buffer = np.zeros(0, dtype=np.int16)
+        self._porcupine_frame_len = 0
+        self._porcupine_keywords = []
 
-        if self.engine.lower() != "openwakeword":
+        engine = (self.engine or "").strip().lower()
+        if engine == "openwakeword":
+            if not _OWW_AVAILABLE:
+                raise RuntimeError(
+                    "openwakeword engine requested but the openwakeword package is not installed"
+                )
+
+            model_path = (self.endpoint or "").strip()
+            if not model_path:
+                raise RuntimeError(
+                    "WAKE_WORD_ENDPOINT must point to an OpenWakeWord model file when engine=openwakeword"
+                )
+            if not os.path.exists(model_path):
+                raise RuntimeError(f"Wake-word model not found: {model_path}")
+
+            self._ensure_oww_resources()
+
+            kwargs = {}
+            lower_path = model_path.lower()
+            if lower_path.endswith(".onnx"):
+                kwargs["inference_framework"] = "onnx"
+            elif lower_path.endswith(".tflite"):
+                kwargs["inference_framework"] = "tflite"
+
+            try:
+                self._oww_model = OpenWakeWordModel(wakeword_models=[model_path], **kwargs)
+            except Exception as exc:  # noqa: BLE001 - surface error to caller
+                raise RuntimeError(f"Failed to load OpenWakeWord model: {exc}") from exc
+
+            self._oww_required_rate = int(
+                getattr(self._oww_model, "sample_rate", 16000) or 16000
+            )
+            self._oww_frame_len = max(int(self._oww_required_rate * 0.08), 1)
+            self._oww_frame_hop = max(int(self._oww_required_rate * 0.04), 1)
+            self._oww_buffer = np.zeros(0, dtype=np.float32)
+            if hasattr(self._oww_model, "reset"):
+                self._oww_model.reset()
+
+            if config.DEBUG_MODE:
+                print(
+                    f"[wake-word] model sample_rate={self._oww_required_rate} "
+                    f"frame_len={self._oww_frame_len} hop={self._oww_frame_hop}"
+                )
+
+            self._detector_mode = "openwakeword"
+            self._publish_event(
+                "status",
+                message="openwakeword_model_loaded",
+                payload={"model": model_path, "sample_rate": self._oww_required_rate},
+            )
             return
 
-        if not _OWW_AVAILABLE:
-            raise RuntimeError(
-                "openwakeword engine requested but the openwakeword package is not installed"
+        if engine == "porcupine":
+            if not _PORCUPINE_AVAILABLE or pvporcupine is None:
+                raise RuntimeError(
+                    "Porcupine engine requested but the pvporcupine package is not installed"
+                )
+
+            keyword_path = (self.endpoint or "").strip()
+            if not keyword_path:
+                raise RuntimeError(
+                    "WAKE_WORD_ENDPOINT must point to a Porcupine keyword (.ppn) file when engine=porcupine"
+                )
+            if not os.path.exists(keyword_path):
+                raise RuntimeError(f"Porcupine keyword not found: {keyword_path}")
+
+            sensitivity = self._clamp_sensitivity(self.sensitivity)
+            try:
+                self._porcupine = pvporcupine.create(
+                    keyword_paths=[keyword_path], sensitivities=[sensitivity]
+                )
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError(f"Failed to load Porcupine keyword: {exc}") from exc
+
+            self._porcupine_buffer = np.zeros(0, dtype=np.int16)
+            self._porcupine_frame_len = self._porcupine.frame_length
+            self._porcupine_keywords = [Path(keyword_path).stem]
+            self._detector_mode = "porcupine"
+            if config.DEBUG_MODE:
+                print(
+                    "[wake-word] porcupine frame_len="
+                    f"{self._porcupine_frame_len} sample_rate={self._porcupine.sample_rate}"
+                )
+            self._publish_event(
+                "status",
+                message="porcupine_keyword_loaded",
+                payload={"keyword": self._porcupine_keywords[0]},
             )
-
-        model_path = (self.endpoint or "").strip()
-        if not model_path:
-            raise RuntimeError(
-                "WAKE_WORD_ENDPOINT must point to an OpenWakeWord model file when engine=openwakeword"
-            )
-        if not os.path.exists(model_path):
-            raise RuntimeError(f"Wake-word model not found: {model_path}")
-
-        self._ensure_oww_resources()
-
-        kwargs = {}
-        lower_path = model_path.lower()
-        if lower_path.endswith(".onnx"):
-            kwargs["inference_framework"] = "onnx"
-        elif lower_path.endswith(".tflite"):
-            kwargs["inference_framework"] = "tflite"
-
-        try:
-            self._oww_model = OpenWakeWordModel(wakeword_models=[model_path], **kwargs)
-        except Exception as exc:  # noqa: BLE001 - surface error to caller
-            raise RuntimeError(f"Failed to load OpenWakeWord model: {exc}") from exc
-
-        # Discover sample rate if exposed, otherwise default to 16 kHz.
-        self._oww_required_rate = int(getattr(self._oww_model, "sample_rate", 16000) or 16000)
-        self._oww_frame_len = max(int(self._oww_required_rate * 0.08), 1)
-        self._oww_frame_hop = max(int(self._oww_required_rate * 0.04), 1)
-        self._oww_buffer = np.zeros(0, dtype=np.float32)
-        if hasattr(self._oww_model, "reset"):
-            self._oww_model.reset()
-
-        if config.DEBUG_MODE:
-            print(
-                f"[wake-word] model sample_rate={self._oww_required_rate} "
-                f"frame_len={self._oww_frame_len} hop={self._oww_frame_hop}"
-            )
-
-        self._detector_mode = "openwakeword"
-        self._publish_event(
-            "status",
-            message="openwakeword_model_loaded",
-            payload={"model": model_path, "sample_rate": self._oww_required_rate},
-        )
+            return
 
     def _frames_required(self) -> int:
         # Higher sensitivity means fewer consecutive frames required.
@@ -280,11 +337,12 @@ class WakeWordController:
         if not self._running:
             return
 
-        data = np.array(indata, dtype=np.float32)
-        if data.ndim > 1:
-            data = data.mean(axis=1)
+        mono = np.asarray(indata)
+        if mono.ndim > 1:
+            mono = mono.mean(axis=1)
+        mono_float = mono.astype(np.float32)
 
-        rms = float(np.sqrt(np.mean(np.square(data))))
+        rms = float(np.sqrt(np.mean(np.square(mono_float))))
         now = time.time()
 
         if np.isnan(rms) or np.isinf(rms):
@@ -296,8 +354,15 @@ class WakeWordController:
             self._publish_event("meter", level=rms, threshold=self.threshold)
             self._last_meter_emit = now
 
+        normalized = (mono_float / 32768.0).astype(np.float32)
+        mono_int16 = np.clip(mono_float, -32768, 32767).astype(np.int16)
+
         if self._detector_mode == "openwakeword" and self._oww_model is not None:
-            self._process_openwakeword(now, data)
+            self._process_openwakeword(now, normalized)
+            return
+
+        if self._detector_mode == "porcupine" and self._porcupine is not None:
+            self._process_porcupine(now, mono_int16)
             return
 
         if rms >= self.threshold:
@@ -333,7 +398,7 @@ class WakeWordController:
         if self._oww_model is None or self._input_samplerate is None:
             return
 
-        chunk = (data / 32768.0).astype(np.float32)
+        chunk = data.astype(np.float32)
 
         if self._input_samplerate != self._oww_required_rate:
             target_len = int(len(chunk) * self._oww_required_rate / self._input_samplerate)
@@ -399,6 +464,48 @@ class WakeWordController:
 
         if not updated:
             return
+
+    def _process_porcupine(self, timestamp: float, samples: np.ndarray) -> None:
+        if self._porcupine is None or self._input_samplerate is None:
+            return
+
+        chunk = samples.astype(np.float32)
+        if self._input_samplerate != self._porcupine.sample_rate:
+            target_len = int(len(chunk) * self._porcupine.sample_rate / self._input_samplerate)
+            if target_len <= 0:
+                return
+            chunk = resample(chunk, target_len)
+        chunk = np.clip(chunk, -32768, 32767).astype(np.int16)
+        if chunk.size == 0:
+            return
+
+        self._porcupine_buffer = np.concatenate((self._porcupine_buffer, chunk))
+
+        while self._porcupine_buffer.size >= self._porcupine_frame_len:
+            frame = self._porcupine_buffer[: self._porcupine_frame_len]
+            self._porcupine_buffer = self._porcupine_buffer[self._porcupine_frame_len :]
+
+            result = self._porcupine.process(frame)
+            if config.DEBUG_MODE:
+                print(
+                    f"[wake-word] porcupine result={result} frame_len={self._porcupine_frame_len}"
+                )
+
+            if result >= 0 and (timestamp - self._last_detection) >= self.cooldown_seconds:
+                self._last_detection = timestamp
+                label = (
+                    self._porcupine_keywords[result]
+                    if result < len(self._porcupine_keywords)
+                    else f"keyword_{result}"
+                )
+                payload = {
+                    "engine": self.engine,
+                    "mode": self._detector_mode,
+                    "label": label,
+                    "score": 1.0,
+                }
+                self._publish_event("detected", payload=payload)
+                self._dispatch_detection(payload)
 
     def _publish_event(
         self,

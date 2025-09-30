@@ -52,6 +52,15 @@ except Exception as err:  # noqa: BLE001
     print(f"[wake-word] OpenWakeWord unavailable: {err}")
 
 try:
+    import pvporcupine
+
+    _PORCUPINE_AVAILABLE = True
+except Exception as err:  # noqa: BLE001
+    pvporcupine = None
+    _PORCUPINE_AVAILABLE = False
+    print(f"[wake-word] Porcupine unavailable: {err}")
+
+try:
     from core import button as button_controller
 except Exception as err:  # noqa: BLE001
     button_controller = None
@@ -621,6 +630,7 @@ def wake_word_status():
             "events_pending": 0,
             "detector_mode": "unknown",
             "oww_available": _OWW_AVAILABLE,
+            "porcupine_available": _PORCUPINE_AVAILABLE,
             "hardware_enabled": False,
             "controller_available": False,
             "button_controller_available": button_controller is not None,
