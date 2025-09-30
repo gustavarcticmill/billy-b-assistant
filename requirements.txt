@@ -1,3 +1,4 @@
+#requirements
 sounddevice
 websockets
 numpy<2
