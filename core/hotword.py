@@ -163,11 +163,16 @@ class WakeWordController:
             if audio_mod.MIC_DEVICE_INDEX is None:
                 audio_mod.detect_devices(debug=config.DEBUG_MODE)
 
+            self._prepare_engine()
+
             channels = max(1, audio_mod.MIC_CHANNELS or 1)
             samplerate = audio_mod.MIC_RATE or 16000
-            blocksize = audio_mod.CHUNK_SIZE or int(samplerate * config.CHUNK_MS / 1000)
+            if self._detector_mode == "openwakeword":
+                samplerate = self._oww_required_rate
+            blocksize = int(samplerate * config.CHUNK_MS / 1000)
 
-            self._prepare_engine()
+            audio_mod.MIC_RATE = samplerate
+            audio_mod.CHUNK_SIZE = blocksize
 
             self._stream = sd.InputStream(
                 samplerate=samplerate,
