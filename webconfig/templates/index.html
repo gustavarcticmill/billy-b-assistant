@@ -512,36 +512,19 @@
 
                         <div class="grid gap-4 md:grid-cols-2">
                             <div>
-                                <label for="WAKE_WORD_ENGINE" class="block font-semibold text-sm text-slate-300">
-                                    Detection Engine
+                                <label for="WAKE_WORD_ENDPOINT" class="block font-semibold text-sm text-slate-300">
+                                    Keyword File Path
                                 </label>
-                                <select id="WAKE_WORD_ENGINE" name="WAKE_WORD_ENGINE"
-                                        class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                                    {% for engine in config.get('WAKE_WORD_ENGINE_OPTIONS', []) %}
-                                    <option value="{{ engine }}" {% if config.get('WAKE_WORD_ENGINE') == engine %}selected{% endif %}>
-                                        {{ engine|capitalize }}
-                                    </option>
-                                    {% endfor %}
-                                </select>
+                                <input type="text" id="WAKE_WORD_ENDPOINT" name="WAKE_WORD_ENDPOINT"
+                                       placeholder="/home/pi/billy-b-assistant/wake-word-models/hey_billy.ppn"
+                                       value="{{ config.get('WAKE_WORD_ENDPOINT', '') }}"
+                                       class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
                                 <p class="text-xs text-slate-400 mt-1">
-                                    Choose the wake word backend. "openwakeword" loads an ONNX model on the device. Use "custom" to bridge a remote detector service.
+                                    Point to your Porcupine keyword file (a <code>.ppn</code> download from Picovoice).
                                 </p>
                             </div>
 
                             <div>
-                                <label for="WAKE_WORD_ENDPOINT" class="block font-semibold text-sm text-slate-300">
-                                    Custom Endpoint
-                                </label>
-                                <input type="text" id="WAKE_WORD_ENDPOINT" name="WAKE_WORD_ENDPOINT"
-                                       placeholder="http://localhost:9000/detect"
-                                       value="{{ config.get('WAKE_WORD_ENDPOINT', '') }}"
-                                       class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                                <p class="text-xs text-slate-400 mt-1">
-                                    For OpenWakeWord, point this to the downloaded wake-word model file (e.g. <code>/home/pi/models/hey_billy.onnx</code>). Leave blank unless required.
-                                </p>
-                            </div>
-
-                            <div class="md:col-span-2">
                                 <label for="WAKE_WORD_PORCUPINE_ACCESS_KEY" class="block font-semibold text-sm text-slate-300">
                                     Porcupine Access Key
                                 </label>
@@ -658,8 +641,7 @@
                                 <div class="bg-zinc-950/30 border border-zinc-800 rounded p-3">
                                     <h5 class="font-semibold text-slate-200 mb-1">Wake Phrase</h5>
                                     <p>Peak RMS: <span id="wake-word-cal-phrase-peak">–</span></p>
-                                    <p>OWW Score: <span id="wake-word-cal-phrase-score">–</span></p>
-                                    <p>Suggested Sensitivity: <span id="wake-word-cal-sensitivity">–</span></p>
+                                    <p class="mt-1 text-slate-400">Aim for peaks comfortably above the ambient noise level.</p>
                                 </div>
                             </div>
 
@@ -667,7 +649,6 @@
                                 <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                                     <div>
                                         <p>Apply threshold <span class="font-semibold" id="wake-word-cal-apply-threshold">–</span>
-                                            and sensitivity <span class="font-semibold" id="wake-word-cal-apply-sensitivity">–</span>
                                             to Billy.</p>
                                         <label class="inline-flex items-center gap-2 mt-1">
                                             <input type="checkbox" id="wake-word-cal-apply-persist" class="w-4 h-4 text-emerald-500 bg-zinc-800 border border-zinc-700" checked>

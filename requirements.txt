@@ -13,5 +13,4 @@ aiohttp
 flask
 lgpio
 packaging
-openwakeword
 pvporcupine

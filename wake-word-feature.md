@@ -15,14 +15,14 @@
 ## Backend Workstreams
 
 ### 1. Configuration and State Management
-- Add new env keys (e.g., `WAKE_WORD_ENABLED`, `WAKE_WORD_ENGINE`, `WAKE_WORD_SENSITIVITY`, `WAKE_WORD_THRESHOLD`, `WAKE_WORD_ENDPOINT`, `WAKE_WORD_PORCUPINE_ACCESS_KEY`) with sane defaults.
+- Add new env keys (e.g., `WAKE_WORD_ENABLED`, `WAKE_WORD_SENSITIVITY`, `WAKE_WORD_THRESHOLD`, `WAKE_WORD_ENDPOINT`, `WAKE_WORD_PORCUPINE_ACCESS_KEY`) with sane defaults.
 - Extend `core/config.py` so the new keys are exposed through `core.config` and available to both the listener and the web UI server.
 - Update `webconfig/server.py` to include the new keys in `CONFIG_KEYS`, `/config`, and `/save` routes.
 - Decide where runtime state lives (e.g., a small `WakeWordController` singleton) to enable toggling the listener without restarting the whole app.
 
 ### 2. Wake Word Listener Service
 - Create a dedicated module (`core/hotword.py`) responsible for:
-  - Initializing the third-party detector (Porcupine/OpenWakeWord) with configurable models.
+  - Initializing the Porcupine detector with configurable keyword files.
   - Owning a `sounddevice.RawInputStream` that mirrors the current audio settings.
   - Providing `start()`, `stop()`, and `set_parameters()` methods invoked through both button logic and UI events.
 - Coordinate microphone access between the listener and `BillySession`:
@@ -53,7 +53,7 @@
 ### 1. Settings Panel Enhancements
 - Introduce a "Wake Word" accordion section in `templates/index.html` with controls for:
   - Enable/disable toggle (writes `WAKE_WORD_ENABLED`).
-  - Engine selection dropdown (porcupine, openwakeword, custom) pulling options from `/config`.
+  - Porcupine configuration inputs (keyword path, access key) pulling options from `/config`.
   - Numeric sliders/inputs for sensitivity and detection threshold, with live tooltips explaining trade-offs.
   - Text input for custom model path or endpoint when applicable.
 - Update the JS config loader to populate the new fields and include them in the payload submitted to `/save`.

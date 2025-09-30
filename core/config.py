@@ -111,7 +111,6 @@ PLAYBACK_VOLUME = 1
 
 # === Wake Word Config ===
 WAKE_WORD_ENABLED = os.getenv("WAKE_WORD_ENABLED", "false").lower() == "true"
-WAKE_WORD_ENGINE = os.getenv("WAKE_WORD_ENGINE", "openwakeword").strip()
 WAKE_WORD_SENSITIVITY = _float_env("WAKE_WORD_SENSITIVITY", "0.5")
 WAKE_WORD_THRESHOLD = _float_env("WAKE_WORD_THRESHOLD", "2400")
 WAKE_WORD_ENDPOINT = os.getenv("WAKE_WORD_ENDPOINT", "").strip()

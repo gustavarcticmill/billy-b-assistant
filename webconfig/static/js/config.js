@@ -291,10 +291,6 @@ const SettingsForm = (() => {
             const wakeEnabledInput = document.getElementById("WAKE_WORD_ENABLED");
             if (wakeEnabledInput) {
                 payload["WAKE_WORD_ENABLED"] = wakeEnabledInput.checked ? "true" : "false";
-                const engineInput = document.getElementById("WAKE_WORD_ENGINE");
-                if (engineInput) {
-                    payload["WAKE_WORD_ENGINE"] = engineInput.value || "";
-                }
                 const sensitivityInput = document.getElementById("WAKE_WORD_SENSITIVITY");
                 if (sensitivityInput) {
                     payload["WAKE_WORD_SENSITIVITY"] = sensitivityInput.value || "0.5";
@@ -836,28 +832,6 @@ const WakeWordPanel = (() => {
         return phrase ?? ambient ?? null;
     };
 
-    const deriveSuggestedSensitivity = () => {
-        const phrase = calibrationState.phrase?.openwakeword;
-        if (!phrase || phrase.available === false) {
-            return null;
-        }
-        if (phrase.recommended_sensitivity !== null && phrase.recommended_sensitivity !== undefined) {
-            return Number(Number(phrase.recommended_sensitivity).toFixed(2));
-        }
-        const bestScore = typeof phrase.best_score === "number" ? phrase.best_score : null;
-        const ambientScore = calibrationState.ambient?.openwakeword?.best_score ?? 0.05;
-        if (bestScore === null || Number.isNaN(bestScore)) {
-            return null;
-        }
-        const noise = Math.max(0.02, Number(ambientScore) || 0.05);
-        const gap = bestScore - noise;
-        if (gap <= 0.02) {
-            return Number(Math.max(0.25, Math.min(0.6, bestScore - 0.05)).toFixed(2));
-        }
-        const suggestion = Math.min(bestScore - 0.05, Math.max(noise + gap * 0.4, 0.2));
-        return Number(suggestion.toFixed(2));
-    };
-
     const renderCalibrationSummary = () => {
         if (!elements.calAmbientRms) return;
 
@@ -869,20 +843,15 @@ const WakeWordPanel = (() => {
         elements.calAmbientThreshold.textContent = formatValue(ambient?.rms?.recommended_threshold);
 
         elements.calPhrasePeak.textContent = formatValue(phrase?.rms?.peak);
-        elements.calPhraseScore.textContent = formatValue(phrase?.openwakeword?.best_score, 2);
-
-        const suggestedSensitivity = deriveSuggestedSensitivity();
-        elements.calSensitivity.textContent = suggestedSensitivity !== null ? formatValue(suggestedSensitivity, 2) : "–";
 
         const suggestedThreshold = deriveSuggestedThreshold();
-        const applyReady = suggestedThreshold !== null || suggestedSensitivity !== null;
+        const applyReady = suggestedThreshold !== null;
 
         if (elements.calApplyContainer) {
             elements.calApplyContainer.classList.toggle("hidden", !applyReady);
         }
         if (applyReady) {
             elements.calApplyThreshold.textContent = suggestedThreshold !== null ? formatValue(suggestedThreshold) : "–";
-            elements.calApplySensitivity.textContent = suggestedSensitivity !== null ? formatValue(suggestedSensitivity, 2) : "–";
         }
 
         updateCalibrationButtons();
@@ -904,17 +873,8 @@ const WakeWordPanel = (() => {
             duration: mode === "ambient" ? 6.0 : 4.0,
         };
 
-        const modelPath = elements.endpointInput?.value?.trim();
-        if (modelPath) {
-            payload.model_path = modelPath;
-        }
-
         if (calibrationState.ambient?.rms?.recommended_threshold) {
             payload.base_threshold = calibrationState.ambient.rms.recommended_threshold;
-        }
-
-        if (calibrationState.ambient?.openwakeword?.best_score !== undefined) {
-            payload.ambient_score = calibrationState.ambient.openwakeword.best_score;
         }
 
         try {
@@ -951,18 +911,16 @@ const WakeWordPanel = (() => {
 
     const applyCalibration = async () => {
         const threshold = deriveSuggestedThreshold();
-        const sensitivity = deriveSuggestedSensitivity();
 
-        if (threshold === null && sensitivity === null) {
+        if (threshold === null) {
             showNotification("No calibration suggestions available yet.", "warning");
             return;
         }
 
         const payload = {
             persist: elements.calPersistCheckbox ? elements.calPersistCheckbox.checked : true,
+            threshold,
         };
-        if (threshold !== null) payload.threshold = threshold;
-        if (sensitivity !== null) payload.sensitivity = sensitivity;
 
         try {
             const res = await fetch("/wake-word/calibrate/apply", {
@@ -975,11 +933,8 @@ const WakeWordPanel = (() => {
                 throw new Error(data.error || "Failed to apply calibration");
             }
 
-            if (threshold !== null && elements.thresholdInput) {
+            if (elements.thresholdInput) {
                 elements.thresholdInput.value = threshold;
-            }
-            if (sensitivity !== null && elements.sensitivityInput) {
-                elements.sensitivityInput.value = sensitivity.toFixed(2);
             }
 
             showNotification("Calibration applied", "success");
@@ -1041,13 +996,10 @@ const WakeWordPanel = (() => {
             if (status.button_controller_available === false) {
                 errorMessages.push("Wake word simulated triggers unavailable in this environment.");
             }
-            if (status.engine === "openwakeword" && status.oww_available === false) {
-                errorMessages.push("Install the 'openwakeword' package to use this engine.");
-            }
-            if (status.engine === "porcupine" && status.porcupine_available === false) {
+            if (status.porcupine_available === false) {
                 errorMessages.push("Install the 'pvporcupine' package and provide a .ppn keyword file.");
             }
-            if (status.engine === "porcupine" && status.porcupine_access_key_present === false) {
+            if (status.porcupine_access_key_present === false) {
                 errorMessages.push("Add your Picovoice Access Key to use the Porcupine engine.");
             }
             if (!controllerAvailable) {
@@ -1070,9 +1022,6 @@ const WakeWordPanel = (() => {
         if (elements.enabledToggle) {
             elements.enabledToggle.addEventListener("change", onToggleChange);
         }
-        elements.engineSelect?.addEventListener("change", () => {
-            applyRuntimeConfig({engine: elements.engineSelect.value});
-        });
         elements.sensitivityInput?.addEventListener("change", () => {
             const value = parseFloat(elements.sensitivityInput.value);
             if (!Number.isNaN(value)) {
@@ -1104,7 +1053,6 @@ const WakeWordPanel = (() => {
         elements = {
             enabledToggle: document.getElementById("WAKE_WORD_ENABLED"),
             enabledLabel: document.getElementById("wake-word-enabled-label"),
-            engineSelect: document.getElementById("WAKE_WORD_ENGINE"),
             sensitivityInput: document.getElementById("WAKE_WORD_SENSITIVITY"),
             thresholdInput: document.getElementById("WAKE_WORD_THRESHOLD"),
             endpointInput: document.getElementById("WAKE_WORD_ENDPOINT"),
@@ -1123,11 +1071,8 @@ const WakeWordPanel = (() => {
             calAmbientPeak: document.getElementById("wake-word-cal-ambient-peak"),
             calAmbientThreshold: document.getElementById("wake-word-cal-ambient-threshold"),
             calPhrasePeak: document.getElementById("wake-word-cal-phrase-peak"),
-            calPhraseScore: document.getElementById("wake-word-cal-phrase-score"),
-            calSensitivity: document.getElementById("wake-word-cal-sensitivity"),
             calApplyContainer: document.getElementById("wake-word-cal-apply"),
             calApplyThreshold: document.getElementById("wake-word-cal-apply-threshold"),
-            calApplySensitivity: document.getElementById("wake-word-cal-apply-sensitivity"),
             calApplyBtn: document.getElementById("wake-word-cal-apply-btn"),
             calPersistCheckbox: document.getElementById("wake-word-cal-apply-persist"),
         };
