@@ -276,6 +276,8 @@ class WakeWordController:
             return
 
         if now - self._last_meter_emit > 0.25:
+            if config.DEBUG_MODE:
+                print(f"[wake-word] RMS={rms:.0f} threshold={self.threshold:.0f}")
             self._publish_event("meter", level=rms, threshold=self.threshold)
             self._last_meter_emit = now
 
