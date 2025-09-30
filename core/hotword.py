@@ -342,6 +342,12 @@ class WakeWordController:
         else:
             best_label, best_score = None, 0.0
 
+        if config.DEBUG_MODE:
+            print(
+                f"[wake-word] best_label={best_label} score={best_score:.3f} "
+                f"sensitivity={self.sensitivity:.2f}"
+            )
+
         self._publish_event(
             "scores",
             payload={
