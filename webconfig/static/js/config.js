@@ -996,6 +996,7 @@ const WakeWordPanel = (() => {
             }
 
             const controllerAvailable = status.controller_available !== false;
+            const hardwareEnabled = status.hardware_enabled !== false;
             const enabled = Boolean(status.enabled);
             setToggle(enabled);
 
@@ -1005,6 +1006,9 @@ const WakeWordPanel = (() => {
             if (!controllerAvailable) {
                 badgeLabel = "Unavailable";
                 badgeColor = {text: "text-amber-300", border: "border-amber-500"};
+            } else if (!hardwareEnabled) {
+                badgeLabel = "Remote";
+                badgeColor = {text: "text-indigo-300", border: "border-indigo-500"};
             } else if (status.last_error) {
                 badgeLabel = "Error";
                 badgeColor = {text: "text-rose-400", border: "border-rose-500"};
@@ -1018,9 +1022,13 @@ const WakeWordPanel = (() => {
 
             setBadge(badgeLabel, badgeColor.text, badgeColor.border);
             if (elements.statusDetail) {
-                elements.statusDetail.textContent = controllerAvailable
-                    ? describeStatus(status)
-                    : "Wake word controller is managed by the Billy service. Restart Billy after saving settings.";
+                if (!controllerAvailable) {
+                    elements.statusDetail.textContent = "Wake word controller is managed by the Billy service. Restart Billy after saving settings.";
+                } else if (!hardwareEnabled) {
+                    elements.statusDetail.textContent = "Listener runs inside Billy; web UI cannot stream events directly.";
+                } else {
+                    elements.statusDetail.textContent = describeStatus(status);
+                }
             }
             const errorMessages = [];
             if (status.last_error) {
@@ -1034,6 +1042,8 @@ const WakeWordPanel = (() => {
             }
             if (!controllerAvailable) {
                 errorMessages.push("Web UI cannot reach the live wake word controller. Changes will apply after restarting Billy.");
+            } else if (!hardwareEnabled) {
+                errorMessages.push("Wake word listener is controlled by the Billy service. Use Billy logs to confirm detections.");
             }
             updateError(errorMessages.join(" | "));
         } catch (err) {
