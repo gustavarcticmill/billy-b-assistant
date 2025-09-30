@@ -227,8 +227,17 @@ class WakeWordController:
         if not os.path.exists(model_path):
             raise RuntimeError(f"Wake-word model not found: {model_path}")
 
+        self._ensure_oww_resources()
+
+        kwargs = {}
+        lower_path = model_path.lower()
+        if lower_path.endswith(".onnx"):
+            kwargs["inference_framework"] = "onnx"
+        elif lower_path.endswith(".tflite"):
+            kwargs["inference_framework"] = "tflite"
+
         try:
-            self._oww_model = OpenWakeWordModel(wakeword_models=[model_path])
+            self._oww_model = OpenWakeWordModel(wakeword_models=[model_path], **kwargs)
         except Exception as exc:  # noqa: BLE001 - surface error to caller
             raise RuntimeError(f"Failed to load OpenWakeWord model: {exc}") from exc
 
@@ -428,6 +437,24 @@ class WakeWordController:
                 message="hardware_enabled" if enabled_flag else "hardware_disabled",
                 payload={"hardware_enabled": enabled_flag},
             )
+
+    @staticmethod
+    def _ensure_oww_resources() -> None:
+        from importlib import resources
+
+        try:
+            files = resources.files("openwakeword.resources.models")
+            if not list(files.iterdir()):  # pylint: disable=unsupported-binary-operation
+                raise FileNotFoundError
+        except (FileNotFoundError, ModuleNotFoundError):
+            try:
+                from openwakeword.utils import download_models
+
+                download_models()
+            except Exception as exc:  # noqa: BLE001
+                raise RuntimeError(
+                    "OpenWakeWord support files are missing. Download them once or set WAKE_WORD_ENDPOINT to a valid model."
+                ) from exc
 
 
 controller = WakeWordController()

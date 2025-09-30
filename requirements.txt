@@ -1,6 +1,6 @@
 sounddevice
 websockets
-numpy
+numpy<2
 scipy
 gpiozero
 python-dotenv

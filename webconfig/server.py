@@ -418,9 +418,23 @@ def _get_openwakeword_model(path: str) -> OpenWakeWordModel | None:
         return None
     if not os.path.exists(path):
         raise RuntimeError(f"Wake-word model not found at {path}")
+    try:
+        # Reuse controller helper if available to ensure bundled resources are present
+        from core.hotword import WakeWordController  # type: ignore
+
+        WakeWordController._ensure_oww_resources()  # pylint: disable=protected-access
+    except Exception as exc:  # noqa: BLE001
+        print(f"[wake-word] Failed to validate OpenWakeWord resources: {exc}")
+
     model = _OWW_MODEL_CACHE.get(path)
     if model is None:
-        model = OpenWakeWordModel(wakeword_models=[path])
+        kwargs = {}
+        lower_path = path.lower()
+        if lower_path.endswith(".onnx"):
+            kwargs["inference_framework"] = "onnx"
+        elif lower_path.endswith(".tflite"):
+            kwargs["inference_framework"] = "tflite"
+        model = OpenWakeWordModel(wakeword_models=[path], **kwargs)
         _OWW_MODEL_CACHE[path] = model
     return model
 
