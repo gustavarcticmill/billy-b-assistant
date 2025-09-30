@@ -10,6 +10,20 @@ from .personality import (
 )
 
 
+def _float_env(key: str, default: str) -> float:
+    value = os.getenv(key)
+    if value is None:
+        return float(default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        print(
+            f"⚠️ Invalid float for {key}={value!r}, falling back to {default}",
+            flush=True,
+        )
+        return float(default)
+
+
 # === Paths ===
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(ROOT_DIR, ".env")
@@ -94,6 +108,13 @@ MIC_TIMEOUT_SECONDS = int(os.getenv("MIC_TIMEOUT_SECONDS", "5"))
 SILENCE_THRESHOLD = int(os.getenv("SILENCE_THRESHOLD", "2000"))
 CHUNK_MS = int(os.getenv("CHUNK_MS", "50"))
 PLAYBACK_VOLUME = 1
+
+# === Wake Word Config ===
+WAKE_WORD_ENABLED = os.getenv("WAKE_WORD_ENABLED", "false").lower() == "true"
+WAKE_WORD_ENGINE = os.getenv("WAKE_WORD_ENGINE", "openwakeword").strip()
+WAKE_WORD_SENSITIVITY = _float_env("WAKE_WORD_SENSITIVITY", "0.5")
+WAKE_WORD_THRESHOLD = _float_env("WAKE_WORD_THRESHOLD", "2400")
+WAKE_WORD_ENDPOINT = os.getenv("WAKE_WORD_ENDPOINT", "").strip()
 
 # === GPIO Config ===
 BUTTON_PIN = int(os.getenv("BUTTON_PIN", "27"))

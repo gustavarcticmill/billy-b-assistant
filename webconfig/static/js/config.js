@@ -288,6 +288,27 @@ const SettingsForm = (() => {
             const formData = new FormData(this);
             const payload = Object.fromEntries(formData.entries());
 
+            const wakeEnabledInput = document.getElementById("WAKE_WORD_ENABLED");
+            if (wakeEnabledInput) {
+                payload["WAKE_WORD_ENABLED"] = wakeEnabledInput.checked ? "true" : "false";
+                const engineInput = document.getElementById("WAKE_WORD_ENGINE");
+                if (engineInput) {
+                    payload["WAKE_WORD_ENGINE"] = engineInput.value || "";
+                }
+                const sensitivityInput = document.getElementById("WAKE_WORD_SENSITIVITY");
+                if (sensitivityInput) {
+                    payload["WAKE_WORD_SENSITIVITY"] = sensitivityInput.value || "0.5";
+                }
+                const thresholdInput = document.getElementById("WAKE_WORD_THRESHOLD");
+                if (thresholdInput) {
+                    payload["WAKE_WORD_THRESHOLD"] = thresholdInput.value || "0";
+                }
+                const endpointInput = document.getElementById("WAKE_WORD_ENDPOINT");
+                if (endpointInput) {
+                    payload["WAKE_WORD_ENDPOINT"] = endpointInput.value || "";
+                }
+            }
+
             const flaskPortInput = document.getElementById("FLASK_PORT");
             const oldPort = parseInt(flaskPortInput.getAttribute("data-original")) || 80;
             const newPort = parseInt(payload["FLASK_PORT"] || "80");
@@ -569,6 +590,528 @@ const PersonaForm = (() => {
     };
 
     return {addBackstoryField, loadPersona, handlePersonaSave};
+})();
+
+
+// ===================== WAKE WORD PANEL =====================
+
+const WakeWordPanel = (() => {
+    const EVENT_LIMIT = 50;
+    const BADGE_CLASSES = [
+        "text-emerald-400",
+        "text-amber-300",
+        "text-rose-400",
+        "text-slate-300",
+        "border-emerald-500",
+        "border-amber-500",
+        "border-rose-500",
+        "border-zinc-700",
+    ];
+
+    let elements = {};
+    let statusTimer = null;
+    let eventsTimer = null;
+    let programmaticToggle = false;
+    const eventHistory = [];
+    const calibrationState = {
+        ambient: null,
+        phrase: null,
+        calibrating: false,
+    };
+
+    const setEnabledLabel = (enabled) => {
+        if (elements.enabledLabel) {
+            elements.enabledLabel.textContent = enabled ? "On" : "Off";
+        }
+    };
+
+    const setToggle = (enabled) => {
+        if (!elements.enabledToggle) return;
+        programmaticToggle = true;
+        elements.enabledToggle.checked = enabled;
+        setEnabledLabel(enabled);
+        setTimeout(() => {
+            programmaticToggle = false;
+        }, 0);
+    };
+
+    const setBadge = (label, textClass, borderClass) => {
+        if (!elements.statusBadge) return;
+        elements.statusBadge.textContent = label;
+        elements.statusBadge.classList.remove(...BADGE_CLASSES);
+        elements.statusBadge.classList.add(textClass, borderClass);
+    };
+
+    const describeStatus = (status) => {
+        const items = [];
+        items.push(status.enabled ? "Enabled" : "Disabled");
+        items.push(status.running ? "listener active" : "listener stopped");
+        if (status.session_active) {
+            items.push("session in progress");
+        }
+        if (status.engine) {
+            items.push(`engine: ${status.engine}`);
+        }
+        if (status.detector_mode) {
+            items.push(`mode: ${status.detector_mode}`);
+        }
+        return items.join(" • ");
+    };
+
+    const updateError = (message) => {
+        if (!elements.lastError) return;
+        if (message) {
+            elements.lastError.textContent = `⚠️ ${message}`;
+            elements.lastError.classList.remove("hidden");
+        } else {
+            elements.lastError.textContent = "";
+            elements.lastError.classList.add("hidden");
+        }
+    };
+
+    const onToggleChange = () => {
+        if (programmaticToggle) return;
+        const enabled = elements.enabledToggle.checked;
+        setEnabledLabel(enabled);
+        applyRuntimeConfig({enabled});
+    };
+
+    const applyRuntimeConfig = async (changes, options = {}) => {
+        if (!changes || Object.keys(changes).length === 0) return;
+        try {
+            const res = await fetch("/wake-word/runtime-config", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(changes),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || data.reason || "Runtime update failed");
+            }
+            if (!options.silent) {
+                showNotification("Wake word runtime updated", "success", 2000);
+            }
+            fetchStatus();
+        } catch (err) {
+            console.error("Wake word runtime update failed:", err);
+            showNotification(`Wake word update failed: ${err.message}`, "error");
+            fetchStatus();
+        }
+    };
+
+    const runTestAction = async (action) => {
+        try {
+            const res = await fetch("/wake-word/test", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({action}),
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "Wake word test failed");
+            }
+            const statusText = data.status || action;
+            showNotification(`Wake word test: ${statusText}`, "info", 2000);
+            fetchStatus();
+        } catch (err) {
+            console.error("Wake word test action failed:", err);
+            showNotification(err.message, "error");
+        }
+    };
+
+    const formatEvent = (event) => {
+        const dt = new Date((event.timestamp || 0) * 1000);
+        const time = Number.isNaN(dt.getTime()) ? "--:--:--" : dt.toLocaleTimeString();
+        const details = [];
+        if (typeof event.level === "number") {
+            details.push(`lvl=${event.level.toFixed(0)}`);
+        }
+        if (typeof event.threshold === "number") {
+            details.push(`thr=${event.threshold.toFixed(0)}`);
+        }
+        const payload = event.payload || {};
+        if (payload.label) {
+            details.push(`label=${payload.label}`);
+        }
+        if (typeof payload.score === "number") {
+            details.push(`score=${payload.score.toFixed(2)}`);
+        }
+        if (event.kind === "scores" && payload.best_label) {
+            details.push(
+                `best=${payload.best_label}:${Number(payload.best_score || 0).toFixed(2)}`
+            );
+        }
+        if (event.message) {
+            details.push(event.message);
+        }
+        return `${time} | ${event.kind}${details.length ? " → " + details.join(" ") : ""}`;
+    };
+
+    const renderEvents = () => {
+        if (!elements.eventsContainer) return;
+        if (eventHistory.length === 0) {
+            elements.eventsContainer.textContent = "Waiting for events…";
+            return;
+        }
+        elements.eventsContainer.innerHTML = eventHistory
+            .slice(-EVENT_LIMIT)
+            .map((evt) => `<div>${formatEvent(evt)}</div>`)
+            .join("");
+    };
+
+    const fetchEvents = async (force = false) => {
+        if (!elements.eventsContainer) return;
+        try {
+            const res = await fetch("/wake-word/events");
+            const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to load events");
+            }
+            const newEvents = Array.isArray(data.events) ? data.events : [];
+            if (force) {
+                eventHistory.length = 0;
+            }
+            for (const evt of newEvents) {
+                eventHistory.push(evt);
+                if (eventHistory.length > EVENT_LIMIT) {
+                    eventHistory.shift();
+                }
+            }
+            if (newEvents.length > 0 || force) {
+                renderEvents();
+            }
+        } catch (err) {
+            console.error("Wake word events fetch failed:", err);
+            elements.eventsContainer.textContent = "Failed to fetch events.";
+        }
+    };
+
+    const setCalStatus = (message) => {
+        if (!elements.calStatus) return;
+        elements.calStatus.textContent = message;
+    };
+
+    const setButtonState = (btn, enabled) => {
+        if (!btn) return;
+        if (enabled) {
+            btn.disabled = false;
+            btn.classList.remove("cursor-not-allowed", "bg-cyan-500/30", "text-slate-300", "opacity-60");
+            btn.classList.add("bg-cyan-500/80", "hover:bg-cyan-500", "text-zinc-900");
+        } else {
+            btn.disabled = true;
+            btn.classList.add("cursor-not-allowed", "bg-cyan-500/30", "text-slate-300");
+            btn.classList.remove("hover:bg-cyan-500", "text-zinc-900", "bg-cyan-500/80");
+        }
+    };
+
+    const updateCalibrationButtons = () => {
+        const busy = calibrationState.calibrating;
+        setButtonState(elements.calAmbientBtn, !busy);
+        setButtonState(
+            elements.calPhraseBtn,
+            !busy && !!calibrationState.ambient && calibrationState.ambient.status === "ok"
+        );
+        if (!calibrationState.ambient || calibrationState.ambient.status !== "ok") {
+            setCalStatus("Step 1: Measure background noise to enable the wake phrase recording.");
+        }
+    };
+
+    const formatValue = (value, decimals = 0) => {
+        if (value === null || value === undefined || Number.isNaN(Number(value))) {
+            return "–";
+        }
+        return Number(value).toFixed(decimals);
+    };
+
+    const deriveSuggestedThreshold = () => {
+        const ambient = calibrationState.ambient?.rms?.recommended_threshold;
+        const phrase = calibrationState.phrase?.rms?.recommended_threshold;
+        if (phrase && ambient) {
+            return Math.round((Number(phrase) + Number(ambient)) / 2);
+        }
+        return phrase ?? ambient ?? null;
+    };
+
+    const deriveSuggestedSensitivity = () => {
+        const phrase = calibrationState.phrase?.openwakeword;
+        if (!phrase || phrase.available === false) {
+            return null;
+        }
+        if (phrase.recommended_sensitivity !== null && phrase.recommended_sensitivity !== undefined) {
+            return Number(Number(phrase.recommended_sensitivity).toFixed(2));
+        }
+        const bestScore = typeof phrase.best_score === "number" ? phrase.best_score : null;
+        const ambientScore = calibrationState.ambient?.openwakeword?.best_score ?? 0.05;
+        if (bestScore === null || Number.isNaN(bestScore)) {
+            return null;
+        }
+        const noise = Math.max(0.02, Number(ambientScore) || 0.05);
+        const gap = bestScore - noise;
+        if (gap <= 0.02) {
+            return Number(Math.max(0.25, Math.min(0.6, bestScore - 0.05)).toFixed(2));
+        }
+        const suggestion = Math.min(bestScore - 0.05, Math.max(noise + gap * 0.4, 0.2));
+        return Number(suggestion.toFixed(2));
+    };
+
+    const renderCalibrationSummary = () => {
+        if (!elements.calAmbientRms) return;
+
+        const ambient = calibrationState.ambient;
+        const phrase = calibrationState.phrase;
+
+        elements.calAmbientRms.textContent = formatValue(ambient?.rms?.percentile_90);
+        elements.calAmbientPeak.textContent = formatValue(ambient?.rms?.peak);
+        elements.calAmbientThreshold.textContent = formatValue(ambient?.rms?.recommended_threshold);
+
+        elements.calPhrasePeak.textContent = formatValue(phrase?.rms?.peak);
+        elements.calPhraseScore.textContent = formatValue(phrase?.openwakeword?.best_score, 2);
+
+        const suggestedSensitivity = deriveSuggestedSensitivity();
+        elements.calSensitivity.textContent = suggestedSensitivity !== null ? formatValue(suggestedSensitivity, 2) : "–";
+
+        const suggestedThreshold = deriveSuggestedThreshold();
+        const applyReady = suggestedThreshold !== null || suggestedSensitivity !== null;
+
+        if (elements.calApplyContainer) {
+            elements.calApplyContainer.classList.toggle("hidden", !applyReady);
+        }
+        if (applyReady) {
+            elements.calApplyThreshold.textContent = suggestedThreshold !== null ? formatValue(suggestedThreshold) : "–";
+            elements.calApplySensitivity.textContent = suggestedSensitivity !== null ? formatValue(suggestedSensitivity, 2) : "–";
+        }
+
+        updateCalibrationButtons();
+    };
+
+    const runCalibration = async (mode) => {
+        if (calibrationState.calibrating) return;
+        if (mode === "phrase" && (!calibrationState.ambient || calibrationState.ambient.status !== "ok")) {
+            showNotification("Run the background measurement first.", "warning");
+            return;
+        }
+
+        calibrationState.calibrating = true;
+        updateCalibrationButtons();
+        setCalStatus(mode === "ambient" ? "Recording background noise…" : "Recording wake phrase…" );
+
+        const payload = {
+            mode,
+            duration: mode === "ambient" ? 6.0 : 4.0,
+        };
+
+        const modelPath = elements.endpointInput?.value?.trim();
+        if (modelPath) {
+            payload.model_path = modelPath;
+        }
+
+        if (calibrationState.ambient?.rms?.recommended_threshold) {
+            payload.base_threshold = calibrationState.ambient.rms.recommended_threshold;
+        }
+
+        if (calibrationState.ambient?.openwakeword?.best_score !== undefined) {
+            payload.ambient_score = calibrationState.ambient.openwakeword.best_score;
+        }
+
+        try {
+            const res = await fetch("/wake-word/calibrate", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload),
+            });
+
+            const data = await res.json();
+            if (!res.ok || data.status !== "ok") {
+                throw new Error(data.error || data.message || "Calibration failed");
+            }
+
+            if (mode === "ambient") {
+                calibrationState.ambient = data;
+                calibrationState.phrase = null; // reset phrase when re-running ambient
+                setCalStatus("Background noise captured. Proceed to Step 2 when you're ready to say the wake phrase.");
+            } else {
+                calibrationState.phrase = data;
+                setCalStatus("Wake phrase recorded. Review the suggestions below.");
+            }
+
+            renderCalibrationSummary();
+        } catch (err) {
+            console.error("Calibration error:", err);
+            showNotification(err.message || "Calibration failed", "error");
+            setCalStatus("Calibration failed. Please try again.");
+        } finally {
+            calibrationState.calibrating = false;
+            updateCalibrationButtons();
+        }
+    };
+
+    const applyCalibration = async () => {
+        const threshold = deriveSuggestedThreshold();
+        const sensitivity = deriveSuggestedSensitivity();
+
+        if (threshold === null && sensitivity === null) {
+            showNotification("No calibration suggestions available yet.", "warning");
+            return;
+        }
+
+        const payload = {
+            persist: elements.calPersistCheckbox ? elements.calPersistCheckbox.checked : true,
+        };
+        if (threshold !== null) payload.threshold = threshold;
+        if (sensitivity !== null) payload.sensitivity = sensitivity;
+
+        try {
+            const res = await fetch("/wake-word/calibrate/apply", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify(payload),
+            });
+            const data = await res.json();
+            if (!res.ok || data.status !== "ok") {
+                throw new Error(data.error || "Failed to apply calibration");
+            }
+
+            if (threshold !== null && elements.thresholdInput) {
+                elements.thresholdInput.value = threshold;
+            }
+            if (sensitivity !== null && elements.sensitivityInput) {
+                elements.sensitivityInput.value = sensitivity.toFixed(2);
+            }
+
+            showNotification("Calibration applied", "success");
+            fetchStatus();
+        } catch (err) {
+            console.error("Apply calibration failed:", err);
+            showNotification(err.message, "error");
+        }
+    };
+
+    const fetchStatus = async () => {
+        if (!elements.statusBadge) return;
+        try {
+            const res = await fetch("/wake-word/status");
+            const status = await res.json();
+            if (!res.ok) {
+                throw new Error(status.error || "Failed to fetch status");
+            }
+
+            const enabled = Boolean(status.enabled);
+            setToggle(enabled);
+
+            let badgeLabel = "Disabled";
+            let badgeColor = {text: "text-slate-300", border: "border-zinc-700"};
+
+            if (status.last_error) {
+                badgeLabel = "Error";
+                badgeColor = {text: "text-rose-400", border: "border-rose-500"};
+            } else if (enabled && status.running) {
+                badgeLabel = "Listening";
+                badgeColor = {text: "text-emerald-400", border: "border-emerald-500"};
+            } else if (enabled && !status.running) {
+                badgeLabel = status.session_active ? "Paused" : "Idle";
+                badgeColor = {text: "text-amber-300", border: "border-amber-500"};
+            }
+
+            setBadge(badgeLabel, badgeColor.text, badgeColor.border);
+            if (elements.statusDetail) {
+                elements.statusDetail.textContent = describeStatus(status);
+            }
+            const errorMessages = [];
+            if (status.last_error) {
+                errorMessages.push(status.last_error);
+            }
+            if (status.button_controller_available === false) {
+                errorMessages.push("Wake word simulated triggers unavailable in this environment.");
+            }
+            if (status.engine === "openwakeword" && status.oww_available === false) {
+                errorMessages.push("Install the 'openwakeword' package to use this engine.");
+            }
+            updateError(errorMessages.join(" | "));
+        } catch (err) {
+            console.error("Wake word status fetch failed:", err);
+            setBadge("Offline", "text-rose-400", "border-rose-500");
+            if (elements.statusDetail) {
+                elements.statusDetail.textContent = "Wake word service unreachable";
+            }
+            updateError(err.message);
+        }
+    };
+
+    const bindEvents = () => {
+        if (elements.enabledToggle) {
+            elements.enabledToggle.addEventListener("change", onToggleChange);
+        }
+        elements.engineSelect?.addEventListener("change", () => {
+            applyRuntimeConfig({engine: elements.engineSelect.value});
+        });
+        elements.sensitivityInput?.addEventListener("change", () => {
+            const value = parseFloat(elements.sensitivityInput.value);
+            if (!Number.isNaN(value)) {
+                applyRuntimeConfig({sensitivity: value}, {silent: true});
+            }
+        });
+        elements.thresholdInput?.addEventListener("change", () => {
+            const value = parseFloat(elements.thresholdInput.value);
+            if (!Number.isNaN(value)) {
+                applyRuntimeConfig({threshold: value}, {silent: true});
+            }
+        });
+        elements.endpointInput?.addEventListener("blur", () => {
+            applyRuntimeConfig({endpoint: elements.endpointInput.value || ""}, {silent: true});
+        });
+        elements.simulateBtn?.addEventListener("click", () => runTestAction("simulate"));
+        elements.stopBtn?.addEventListener("click", () => runTestAction("stop"));
+        elements.refreshBtn?.addEventListener("click", () => fetchEvents(true));
+        elements.calAmbientBtn?.addEventListener("click", () => runCalibration("ambient"));
+        elements.calPhraseBtn?.addEventListener("click", () => runCalibration("phrase"));
+        elements.calApplyBtn?.addEventListener("click", applyCalibration);
+    };
+
+    const init = () => {
+        elements = {
+            enabledToggle: document.getElementById("WAKE_WORD_ENABLED"),
+            enabledLabel: document.getElementById("wake-word-enabled-label"),
+            engineSelect: document.getElementById("WAKE_WORD_ENGINE"),
+            sensitivityInput: document.getElementById("WAKE_WORD_SENSITIVITY"),
+            thresholdInput: document.getElementById("WAKE_WORD_THRESHOLD"),
+            endpointInput: document.getElementById("WAKE_WORD_ENDPOINT"),
+            statusBadge: document.getElementById("wake-word-state-badge"),
+            statusDetail: document.getElementById("wake-word-status-detail"),
+            lastError: document.getElementById("wake-word-last-error"),
+            eventsContainer: document.getElementById("wake-word-events"),
+            simulateBtn: document.getElementById("wake-word-test-trigger"),
+            stopBtn: document.getElementById("wake-word-test-stop"),
+            refreshBtn: document.getElementById("wake-word-events-refresh"),
+            calAmbientBtn: document.getElementById("wake-word-cal-ambient"),
+            calPhraseBtn: document.getElementById("wake-word-cal-phrase"),
+            calStatus: document.getElementById("wake-word-cal-status"),
+            calAmbientRms: document.getElementById("wake-word-cal-ambient-rms"),
+            calAmbientPeak: document.getElementById("wake-word-cal-ambient-peak"),
+            calAmbientThreshold: document.getElementById("wake-word-cal-ambient-threshold"),
+            calPhrasePeak: document.getElementById("wake-word-cal-phrase-peak"),
+            calPhraseScore: document.getElementById("wake-word-cal-phrase-score"),
+            calSensitivity: document.getElementById("wake-word-cal-sensitivity"),
+            calApplyContainer: document.getElementById("wake-word-cal-apply"),
+            calApplyThreshold: document.getElementById("wake-word-cal-apply-threshold"),
+            calApplySensitivity: document.getElementById("wake-word-cal-apply-sensitivity"),
+            calApplyBtn: document.getElementById("wake-word-cal-apply-btn"),
+            calPersistCheckbox: document.getElementById("wake-word-cal-apply-persist"),
+        };
+
+        if (!elements.enabledToggle || !elements.statusBadge) {
+            return;
+        }
+
+        bindEvents();
+        updateCalibrationButtons();
+        renderCalibrationSummary();
+        fetchStatus();
+        fetchEvents(true);
+        statusTimer = setInterval(fetchStatus, 5000);
+        eventsTimer = setInterval(fetchEvents, 3000);
+    };
+
+    return {init};
 })();
 
 
@@ -1301,6 +1844,7 @@ document.addEventListener("DOMContentLoaded", () => {
     AudioPanel.loadMicGain();
     SettingsForm.handleSettingsSave();
     PersonaForm.handlePersonaSave();
+    WakeWordPanel.init();
     window.addBackstoryField = PersonaForm.addBackstoryField;
     MotorPanel.bindUI();
     Sections.collapsible();

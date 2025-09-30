@@ -12,3 +12,4 @@ aiohttp
 flask
 lgpio
 packaging
+openwakeword
