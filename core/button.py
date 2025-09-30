@@ -153,7 +153,6 @@ def start_loop():
     button.when_pressed = on_button
     wake_word_controller.set_parameters(
         enabled=config.WAKE_WORD_ENABLED,
-        engine=config.WAKE_WORD_ENGINE,
         sensitivity=config.WAKE_WORD_SENSITIVITY,
         threshold=config.WAKE_WORD_THRESHOLD,
         endpoint=config.WAKE_WORD_ENDPOINT,

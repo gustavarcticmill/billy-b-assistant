@@ -411,6 +411,10 @@ DEBUG_MODE=true
 DEBUG_MODE_INCLUDE_DELTA=false
 
 ALLOW_UPDATE_PERSONALITY_INI=true
+# Wake word settings
+WAKE_WORD_ENABLED=true
+WAKE_WORD_ENDPOINT=/home/pi/billy-b-assistant/wake-word-models/hey_billy.ppn
+WAKE_WORD_PORCUPINE_ACCESS_KEY=pvx_********************************
 ```
 
 **OPENAI_API_KEY**: (Required) get it from <https://platform.openai.com/api-keys>  
@@ -420,7 +424,19 @@ ALLOW_UPDATE_PERSONALITY_INI=true
 **SILENCE_THRESHOLD**: Audio threshold (RMS) for what counts as mic input;lower this value if Billy interrupts you too quickly, set higher if Billy doesn't respond (because he thinks you're still talking)  
 **DEBUG_MODE**: Print debug information such as OpenAI responses to the output stream  
 **DEBUG_MODE_INCLUDE_DELTA**: Also print voice and speech delta data, which can get very noisy  
-**ALLOW_UPDATE_PERSONALITY_INI**: If true, personality updates asked for by the user will be written and committed to the personality file. If false, changes to personality parameters will only affect the current running process (`true` is default)
+**ALLOW_UPDATE_PERSONALITY_INI**: If true, personality updates asked for by the user will be written and committed to the personality file. If false, changes to personality parameters will only affect the current running process (`true` is default)  
+**WAKE_WORD_ENABLED**: Enables the wake-word listener so Billy can start sessions hands-free. The web UI toggle writes this value for you.  
+**WAKE_WORD_ENDPOINT**: Path to the Porcupine keyword file (`.ppn`).  
+**WAKE_WORD_PORCUPINE_ACCESS_KEY**: Picovoice AccessKey required by Porcupine. You can paste this in the Wake Word panel; leaving it blank falls back to the legacy `PICOVOICE_ACCESS_KEY` env var if present.  
+
+### Configuring Porcupine
+
+1. Place the Porcupine keyword file (`.ppn`) somewhere accessible on the Pi (for example, `/home/pi/billy-b-assistant/wake-word-models/hey_billy.ppn`).
+2. In the Web UI open **Settings → Wake Word**, enable the toggle, and enter the keyword path in **Keyword File Path**.
+3. Paste your Picovoice AccessKey into **Porcupine Access Key**. The UI writes `WAKE_WORD_ENDPOINT` and `WAKE_WORD_PORCUPINE_ACCESS_KEY` to `.env` for you.
+4. Save and restart Billy so the wake-word listener reloads with the new credentials.
+
+If you prefer editing `.env` manually, set the same variables as shown above and restart the `billy` service. The controller also honours `PICOVOICE_ACCESS_KEY` for compatibility, but new setups should use `WAKE_WORD_PORCUPINE_ACCESS_KEY`.
 
 ### Example `persona.ini` File
 

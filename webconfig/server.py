@@ -27,8 +27,6 @@ from flask import (
 )
 from packaging.version import InvalidVersion
 from packaging.version import parse as parse_version
-from scipy.signal import resample
-from typing import Any
 
 
 # Project setup
@@ -41,15 +39,6 @@ try:
 except Exception as err:  # noqa: BLE001
     wake_word_controller = None
     print(f"[wake-word] Controller unavailable: {err}")
-
-try:
-    from openwakeword.model import Model as OpenWakeWordModel
-
-    _OWW_AVAILABLE = True
-except Exception as err:  # noqa: BLE001
-    OpenWakeWordModel = Any  # type: ignore[assignment]
-    _OWW_AVAILABLE = False
-    print(f"[wake-word] OpenWakeWord unavailable: {err}")
 
 try:
     import pvporcupine
@@ -98,7 +87,6 @@ CONFIG_KEYS = [
     "FLASK_PORT",
     "RUN_MODE",
     "WAKE_WORD_ENABLED",
-    "WAKE_WORD_ENGINE",
     "WAKE_WORD_SENSITIVITY",
     "WAKE_WORD_THRESHOLD",
     "WAKE_WORD_ENDPOINT",
@@ -116,7 +104,6 @@ WAKE_UP_DIR_DEFAULT = PROJECT_ROOT / "sounds" / "wake-up" / "default"
 rms_queue = queue.Queue()
 mic_check_running = False
 calibration_lock = threading.Lock()
-_OWW_MODEL_CACHE: dict[str, OpenWakeWordModel] = {}
 
 # ==== Helpers: Environment, Config, Versions ====
 
@@ -143,11 +130,6 @@ def load_env():
             "echo",
             "fable",
             "nova",
-        ],
-        "WAKE_WORD_ENGINE_OPTIONS": [
-            "openwakeword",
-            "porcupine",
-            "custom",
         ],
     }
 
@@ -423,95 +405,6 @@ def _recommend_threshold(baseline: float, peak: float) -> float:
     return max(baseline + 100.0, min(suggested, cap))
 
 
-def _get_openwakeword_model(path: str) -> OpenWakeWordModel | None:
-    if not path or not _OWW_AVAILABLE:
-        return None
-    if not os.path.exists(path):
-        raise RuntimeError(f"Wake-word model not found at {path}")
-    try:
-        # Reuse controller helper if available to ensure bundled resources are present
-        from core.hotword import WakeWordController  # type: ignore
-
-        WakeWordController._ensure_oww_resources()  # pylint: disable=protected-access
-    except Exception as exc:  # noqa: BLE001
-        print(f"[wake-word] Failed to validate OpenWakeWord resources: {exc}")
-
-    model = _OWW_MODEL_CACHE.get(path)
-    if model is None:
-        kwargs = {}
-        lower_path = path.lower()
-        if lower_path.endswith(".onnx"):
-            kwargs["inference_framework"] = "onnx"
-        elif lower_path.endswith(".tflite"):
-            kwargs["inference_framework"] = "tflite"
-        model = OpenWakeWordModel(wakeword_models=[path], **kwargs)
-        _OWW_MODEL_CACHE[path] = model
-    return model
-
-
-def _compute_openwakeword_metrics(
-    samples: np.ndarray,
-    samplerate: int,
-    model_path: str,
-    ambient_score: float | None = None,
-):
-    result: dict = {
-        "available": _OWW_AVAILABLE and bool(model_path),
-        "model_path": model_path,
-        "best_label": None,
-        "best_score": 0.0,
-        "recommended_sensitivity": None,
-    }
-
-    if not result["available"]:
-        return result
-
-    try:
-        model = _get_openwakeword_model(model_path)
-    except Exception as exc:  # noqa: BLE001
-        result.update({"available": False, "error": str(exc)})
-        return result
-
-    if model is None:
-        result["available"] = False
-        return result
-
-    required_rate = int(getattr(model, "sample_rate", 16000) or 16000)
-    float_samples = samples.astype(np.float32) / 32768.0
-    if samplerate != required_rate:
-        target_len = int(len(float_samples) * required_rate / samplerate)
-        if target_len > 0:
-            float_samples = resample(float_samples, target_len)
-
-    try:
-        scores = model.predict(float_samples)
-    except Exception as exc:  # noqa: BLE001
-        result.update({"error": f"OpenWakeWord inference failed: {exc}"})
-        return result
-
-    result["scores"] = scores or {}
-    if scores:
-        best_label, best_score = max(scores.items(), key=lambda item: item[1])
-        result["best_label"] = best_label
-        result["best_score"] = float(best_score)
-
-        if ambient_score is None:
-            ambient_score = float(min(scores.values())) if scores else 0.05
-
-        noise_floor = max(0.05, float(ambient_score))
-        score_gap = max(0.0, float(best_score) - noise_floor)
-        if score_gap > 0.01:
-            recommended = noise_floor + score_gap * 0.4
-            recommended = min(recommended, float(best_score) - 0.05)
-            recommended = max(0.15, min(0.95, recommended))
-            result["recommended_sensitivity"] = round(recommended, 3)
-    else:
-        result["best_label"] = None
-        result["best_score"] = 0.0
-
-    return result
-
-
 # ==== Audio RMS stream for mic check ====
 
 
@@ -622,7 +515,7 @@ def wake_word_status():
         return jsonify({
             "enabled": core_config.WAKE_WORD_ENABLED,
             "running": False,
-            "engine": core_config.WAKE_WORD_ENGINE,
+            "engine": "porcupine",
             "sensitivity": core_config.WAKE_WORD_SENSITIVITY,
             "threshold": core_config.WAKE_WORD_THRESHOLD,
             "endpoint": core_config.WAKE_WORD_ENDPOINT,
@@ -633,7 +526,6 @@ def wake_word_status():
             "last_error": "controller unavailable",
             "events_pending": 0,
             "detector_mode": "unknown",
-            "oww_available": _OWW_AVAILABLE,
             "porcupine_available": _PORCUPINE_AVAILABLE,
             "hardware_enabled": False,
             "controller_available": False,
@@ -683,9 +575,6 @@ def wake_word_runtime_config():
         enabled_val = _maybe_bool(data["enabled"])
         if enabled_val is not None:
             updates["enabled"] = enabled_val
-
-    if "engine" in data:
-        updates["engine"] = str(data["engine"])
 
     if "endpoint" in data:
         updates["endpoint"] = str(data["endpoint"])
@@ -1100,12 +989,6 @@ def wake_word_calibrate():
         duration = float(payload.get("duration", 6.0))
         duration = max(1.5, min(duration, 12.0))
 
-        ambient_score = payload.get("ambient_score")
-        try:
-            ambient_score = None if ambient_score is None else float(ambient_score)
-        except (TypeError, ValueError):
-            ambient_score = None
-
         ambient_threshold = payload.get("base_threshold")
         try:
             ambient_threshold = None if ambient_threshold is None else float(ambient_threshold)
@@ -1120,16 +1003,12 @@ def wake_word_calibrate():
             combined_threshold = int(round((ambient_threshold + phrase_target) / 2))
             rms["recommended_threshold"] = max(rms["recommended_threshold"], combined_threshold)
 
-        model_path = payload.get("model_path") or core_config.WAKE_WORD_ENDPOINT
-        oww_metrics = _compute_openwakeword_metrics(samples, samplerate, model_path, ambient_score)
-
         response = {
             "status": "ok",
             "mode": mode,
             "duration": duration,
             "samplerate": samplerate,
             "rms": rms,
-            "openwakeword": oww_metrics,
         }
 
         return jsonify(response)
