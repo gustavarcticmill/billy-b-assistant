@@ -164,6 +164,56 @@ const SettingsForm = (() => {
         });
     };
 
+    const bindFactoryReset = () => {
+        const resetBtn = document.getElementById("factory-reset-btn");
+        if (!resetBtn) return;
+
+        resetBtn.addEventListener("click", async () => {
+            const confirmed = confirm(
+                "Factory reset will remove custom profiles/personas, delete .env and versions.ini, clear Billy service logs, reset the git working tree to the current commit, and disconnect the active Wi-Fi connection.\n\nContinue?"
+            );
+            if (!confirmed) return;
+
+            resetBtn.disabled = true;
+            resetBtn.classList.add("opacity-50", "cursor-not-allowed");
+            showNotification("Running factory reset...", "warning", 4000);
+
+            try {
+                const response = await fetch("/factory-reset", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({confirm: true}),
+                });
+                const data = await response.json();
+
+                if (response.ok && data.status === "ok") {
+                    const summary = [];
+                    if (data.removed?.env) summary.push(".env");
+                    if (data.removed?.versions) summary.push("versions.ini");
+                    if (data.removed?.profiles?.length) summary.push(`${data.removed.profiles.length} profile(s)`);
+                    if (data.removed?.personas?.length) summary.push(`${data.removed.personas.length} persona(s)`);
+                    if (data.logs_cleared) summary.push("service logs");
+                    if (data.git_reset) summary.push("git worktree");
+                    if (data.wifi_removed?.length) summary.push("Wi-Fi connection");
+                    const msg = summary.length
+                        ? `Factory reset complete: ${summary.join(", ")}`
+                        : "Factory reset complete.";
+                    const rebootMsg = data.rebooting ? " Rebooting now..." : "";
+                    showNotification(`${msg}${rebootMsg}`, "success", 6000);
+                } else {
+                    const errors = data.errors?.length ? data.errors.join("; ") : (data.error || "Factory reset incomplete");
+                    showNotification(errors, "error", 8000);
+                }
+            } catch (error) {
+                console.error("Factory reset failed:", error);
+                showNotification("Factory reset failed", "error", 6000);
+            } finally {
+                resetBtn.disabled = false;
+                resetBtn.classList.remove("opacity-50", "cursor-not-allowed");
+            }
+        });
+    };
+
     fetch('/hostname')
         .then(res => res.json())
         .then(data => {
@@ -237,7 +287,14 @@ const SettingsForm = (() => {
         });
     };
 
-    return {handleSettingsSave, populateDropdowns, saveDropdownSelections, initMouthArticulationSlider, refreshFromConfig};
+    return {
+        handleSettingsSave,
+        populateDropdowns,
+        saveDropdownSelections,
+        initMouthArticulationSlider,
+        refreshFromConfig,
+        bindFactoryReset,
+    };
 })();
 
 // Make SettingsForm globally available

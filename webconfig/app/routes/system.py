@@ -1,4 +1,5 @@
 import os
+import shutil
 import subprocess
 
 # Import logger
@@ -60,6 +61,178 @@ CONFIG_KEYS = [
     "SHOW_RC_VERSIONS",
     "FLAP_ON_BOOT",
 ]
+
+
+def _remove_path(path: Path, removed: list[str]) -> None:
+    if not path.exists():
+        return
+    if path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+    removed.append(str(path))
+
+
+def _remove_custom_files() -> dict:
+    removed: dict[str, list[str] | bool] = {
+        "env": False,
+        "versions": False,
+        "profiles": [],
+        "personas": [],
+    }
+    errors: list[str] = []
+
+    env_path = Path(ENV_PATH)
+    if env_path.exists():
+        try:
+            env_path.unlink()
+            removed["env"] = True
+        except Exception as exc:
+            errors.append(f"Failed to delete .env: {exc}")
+
+    versions_path = Path(PROJECT_ROOT) / "versions.ini"
+    if versions_path.exists():
+        try:
+            versions_path.unlink()
+            removed["versions"] = True
+        except Exception as exc:
+            errors.append(f"Failed to delete versions.ini: {exc}")
+
+    profiles_dir = Path(PROJECT_ROOT) / "profiles"
+    if profiles_dir.exists():
+        for profile_file in profiles_dir.glob("*.ini"):
+            if profile_file.name.lower() == "guest.ini":
+                continue
+            try:
+                _remove_path(profile_file, removed["profiles"])
+            except Exception as exc:
+                errors.append(f"Failed to delete profile {profile_file}: {exc}")
+
+    presets_dir = Path(PROJECT_ROOT) / "persona_presets"
+    preset_names = set()
+    if presets_dir.exists():
+        for preset_dir in presets_dir.iterdir():
+            if preset_dir.is_dir():
+                preset_names.add(preset_dir.name)
+
+    personas_dir = Path(PROJECT_ROOT) / "personas"
+    if personas_dir.exists():
+        for persona_file in personas_dir.glob("*.ini"):
+            if persona_file.stem in preset_names:
+                continue
+            try:
+                _remove_path(persona_file, removed["personas"])
+            except Exception as exc:
+                errors.append(f"Failed to delete persona file {persona_file}: {exc}")
+        for persona_dir in personas_dir.iterdir():
+            if not persona_dir.is_dir():
+                continue
+            if persona_dir.name in preset_names:
+                continue
+            try:
+                _remove_path(persona_dir, removed["personas"])
+            except Exception as exc:
+                errors.append(f"Failed to delete persona folder {persona_dir}: {exc}")
+
+    return {"removed": removed, "errors": errors}
+
+
+def _clear_service_logs() -> dict:
+    errors: list[str] = []
+    units = ["billy.service", "billy-webconfig.service"]
+    for unit in units:
+        for args in (
+            ["sudo", "journalctl", "-u", unit, "--rotate"],
+            ["sudo", "journalctl", "-u", unit, "--vacuum-time=1s"],
+        ):
+            try:
+                result = subprocess.run(
+                    args, check=False, capture_output=True, text=True
+                )
+                if result.returncode != 0:
+                    stderr = result.stderr.strip() or result.stdout.strip()
+                    errors.append(f"{unit}: {' '.join(args[1:])} failed: {stderr}")
+            except FileNotFoundError:
+                errors.append("journalctl not available")
+                break
+            except Exception as exc:
+                errors.append(f"{unit}: {' '.join(args[1:])} failed: {exc}")
+    return {"errors": errors}
+
+
+def _remove_active_wifi_connections() -> dict:
+    removed: list[str] = []
+    errors: list[str] = []
+    try:
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip() or result.stdout.strip()
+            errors.append(f"nmcli list failed: {stderr}")
+            return {"removed": removed, "errors": errors}
+        for line in result.stdout.splitlines():
+            parts = line.split(":")
+            if len(parts) < 2:
+                continue
+            name, conn_type = parts[0], parts[1]
+            if conn_type != "wifi" or not name:
+                continue
+            delete_result = subprocess.run(
+                ["sudo", "nmcli", "connection", "delete", name],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if delete_result.returncode == 0:
+                removed.append(name)
+            else:
+                stderr = delete_result.stderr.strip() or delete_result.stdout.strip()
+                errors.append(f"Failed to delete Wi-Fi '{name}': {stderr}")
+    except FileNotFoundError:
+        errors.append("nmcli not available")
+    except Exception as exc:
+        errors.append(f"Wi-Fi removal failed: {exc}")
+    return {"removed": removed, "errors": errors}
+
+
+def _reset_git_worktree() -> dict:
+    errors: list[str] = []
+    details: dict[str, str] = {}
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip() or result.stdout.strip()
+            errors.append(f"git rev-parse failed: {stderr}")
+            return {"errors": errors, "details": details}
+        head = result.stdout.strip()
+        details["head"] = head
+
+        reset_result = subprocess.run(
+            ["git", "reset", "--hard", head],
+            cwd=PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if reset_result.returncode != 0:
+            stderr = reset_result.stderr.strip() or reset_result.stdout.strip()
+            errors.append(f"git reset --hard failed: {stderr}")
+    except FileNotFoundError:
+        errors.append("git not available")
+    except Exception as exc:
+        errors.append(f"git reset failed: {exc}")
+
+    return {"errors": errors, "details": details}
 
 
 def delayed_restart():
@@ -525,6 +698,48 @@ def save_env():
         return jsonify({"error": str(e)}), 500
 
 
+@bp.route("/factory-reset", methods=["POST"])
+def factory_reset():
+    data = request.get_json(silent=True) or {}
+    if not data.get("confirm"):
+        return jsonify({"status": "error", "error": "Confirmation required"}), 400
+
+    file_results = _remove_custom_files()
+    log_results = _clear_service_logs()
+    wifi_results = _remove_active_wifi_connections()
+    git_results = _reset_git_worktree()
+
+    errors = (
+        file_results.get("errors", [])
+        + log_results.get("errors", [])
+        + wifi_results.get("errors", [])
+        + git_results.get("errors", [])
+    )
+
+    response = {
+        "status": "ok" if not errors else "partial",
+        "removed": file_results.get("removed", {}),
+        "logs_cleared": not log_results.get("errors"),
+        "wifi_removed": wifi_results.get("removed", []),
+        "git_reset": not git_results.get("errors"),
+        "git_details": git_results.get("details", {}),
+        "errors": errors,
+    }
+    logger.info(f"[factory_reset] Completed with status: {response['status']}")
+    try:
+        threading.Thread(
+            target=lambda: (
+                time.sleep(2),
+                subprocess.Popen(["sudo", "reboot"]),
+            )
+        ).start()
+        response["rebooting"] = True
+    except Exception as exc:
+        response["rebooting"] = False
+        response["errors"].append(f"Failed to reboot: {exc}")
+    return jsonify(response)
+
+
 @bp.route("/hostname", methods=["GET", "POST"])
 def hostname():
     if request.method == "GET":
@@ -541,3 +756,6 @@ def hostname():
         except Exception as e:
             return jsonify({"error": str(e)}), 500
     return jsonify({"error": "Unsupported method"}), 405
+
+
+from pathlib import Path

@@ -590,6 +590,25 @@
                     <!-- Hidden checkbox for form submission -->
                     <input type="checkbox" id="SHOW_RC_VERSIONS" name="SHOW_RC_VERSIONS" class="hidden" value="True">
                 </div>
+
+                <!-- Factory Reset -->
+                <div class="flex flex-col gap-3 p-3 rounded-lg border border-rose-600/50 bg-rose-500/10">
+                    <div>
+                        <div class="text-white font-medium text-sm">Factory Reset</div>
+                        <div class="text-xs text-zinc-400">
+                            Removes custom profiles/personas and resets all settings to their default values, clears Billy service logs,
+                            and disconnects the active Wi-Fi connection.
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-end">
+                        <button id="factory-reset-btn"
+                                type="button"
+                                class="bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold py-2 px-4 rounded flex gap-2 items-center">
+                            <span class="material-icons">restart_alt</span>
+                            Factory Reset
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </form>
