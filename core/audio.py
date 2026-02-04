@@ -52,6 +52,8 @@ last_played_time = time.time()
 song_mode = False
 beat_length = 0.5
 compensate_tail_beats = 0.0
+song_mouth_threshold = 1500
+song_tail_threshold = 1500
 
 PROVIDER_MIC_RATE = 24000
 PROVIDER_OUTPUT_RATE = 24000
@@ -166,7 +168,9 @@ def playback_worker(chunk_ms):
                         audio_chunk, flap_chunk, rms_drums = item[1], item[2], item[3]
 
                         flap_from_pcm_chunk(
-                            np.frombuffer(flap_chunk, dtype=np.int16), chunk_ms=chunk_ms
+                            np.frombuffer(flap_chunk, dtype=np.int16),
+                            threshold=song_mouth_threshold,
+                            chunk_ms=chunk_ms,
                         )
 
                         if rms_drums > drums_peak:
@@ -181,7 +185,10 @@ def playback_worker(chunk_ms):
                         # print(f"[DEBUG] ⏱ elapsed: {elapsed_song_time:.2f}s | 🥁 adjusted: {adjusted_now:.2f}s | 🎯 next beat at {next_beat_time:.2f}s | 🐟 head_move_queue: {list(head_move_queue.queue)}")
 
                         if adjusted_now >= next_beat_time:
-                            if drums_peak > 1500 and not movements.head_out:
+                            if (
+                                drums_peak > song_tail_threshold
+                                and not movements.head_out
+                            ):
                                 move_tail_async(duration=0.2)
                             drums_peak = 0
                             drums_peak_time = 0
@@ -495,6 +502,7 @@ async def play_song(song_name, interrupt_event=None):
         metadata = {
             "bpm": None,
             "head_moves": [],
+            "mouth_threshold": 1500,
             "tail_threshold": 1500,
             "gain": 1.0,
             "compensate_tail": 0.0,
@@ -510,6 +518,9 @@ async def play_song(song_name, interrupt_event=None):
             if config.has_section('SONG'):
                 metadata['bpm'] = config.getfloat('SONG', 'bpm', fallback=120.0)
                 metadata['gain'] = config.getfloat('SONG', 'gain', fallback=1.0)
+                metadata['mouth_threshold'] = config.getfloat(
+                    'SONG', 'mouth_threshold', fallback=1500.0
+                )
                 metadata['tail_threshold'] = config.getfloat(
                     'SONG', 'tail_threshold', fallback=1500.0
                 )
@@ -544,7 +555,13 @@ async def play_song(song_name, interrupt_event=None):
                             (float(v.split(':')[0]), float(v.split(':')[1]))
                             for v in value.split(',')
                         ]
-                    elif key in ("bpm", "tail_threshold", "gain", "compensate_tail"):
+                    elif key in (
+                        "bpm",
+                        "mouth_threshold",
+                        "tail_threshold",
+                        "gain",
+                        "compensate_tail",
+                    ):
                         metadata[key] = float(value.strip())
                     elif key == "half_tempo_tail_flap":
                         metadata[key] = value.strip().lower() == "true"
@@ -554,9 +571,13 @@ async def play_song(song_name, interrupt_event=None):
     metadata = load_metadata(SONG_DIR)
     GAIN = metadata.get("gain", 1.0)
     BPM = metadata.get("bpm", 120)
+    mouth_threshold = metadata.get("mouth_threshold", 1500)
     tail_threshold = metadata.get("tail_threshold", 1500)
     global compensate_tail_beats
     compensate_tail_beats = metadata.get("compensate_tail", 0.0)
+    global song_mouth_threshold, song_tail_threshold
+    song_mouth_threshold = mouth_threshold
+    song_tail_threshold = tail_threshold
     head_move_schedule = metadata.get("head_moves", [])
     for move in head_move_schedule:
         audio.head_move_queue.put(move)

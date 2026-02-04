@@ -57,4 +57,5 @@ else:
         f"  XAI_API_KEY from os.getenv: {'set' if xai_from_env else 'not set'}\n"
         f"  Please check your .env file and ensure it contains OPENAI_API_KEY or XAI_API_KEY"
     )
-    raise ValueError(error_msg)
+    # Never hard-fail on missing API keys; log a warning so services still start.
+    logger.warning(error_msg)
