@@ -590,8 +590,97 @@
                     <!-- Hidden checkbox for form submission -->
                     <input type="checkbox" id="SHOW_RC_VERSIONS" name="SHOW_RC_VERSIONS" class="hidden" value="True">
                 </div>
+
+                <!-- Reset to Defaults -->
+                <div id="reset-defaults-card" class="flex flex-row justify-between gap-3 p-3 rounded-lg border border-zinc-700 bg-rose-500/10 hover:border-rose-500 transition-colors cursor-pointer">
+                    <div>
+                        <div class="text-white font-medium text-sm">Reset to Defaults</div>
+                        <div class="text-xs text-zinc-400 mb-1">
+                            Select parts of the configuration to reset
+                        </div>
+                    </div>
+                    <div id="factory-reset-btn-wrapper" class="flex items-center justify-end hidden">
+                        <button id="factory-reset-btn"
+                                type="button"
+                                class="bg-rose-600 hover:bg-rose-500 text-white text-sm font-semibold py-2 px-4 rounded flex gap-2 items-center">
+                            <span class="material-icons">restart_alt</span>
+                            Reset to Defaults
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </form>
 
 </section>
+
+<!-- Reset to Defaults Modal -->
+<div id="factory-reset-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 hidden">
+    <div class="bg-zinc-900/60 backdrop-blur-xs border border-zinc-700 rounded-lg w-full max-w-xl mx-4 shadow-2xl">
+        <div class="flex justify-between items-center p-4 border-b border-zinc-700">
+            <h3 class="text-lg font-semibold text-white flex items-center gap-2">
+                <span class="material-icons text-rose-400">restart_alt</span>
+                Reset to Defaults
+            </h3>
+            <button id="close-factory-reset-modal" class="text-zinc-400 hover:text-white">
+                <span class="material-icons">close</span>
+            </button>
+        </div>
+        <div class="p-6 space-y-4">
+            <div class="font-semibold">Select parts of the configuration to reset:</div>
+            
+            <p class="text-sm text-rose-200/80">These actions can not be undone.</p>
+            <div class="space-y-3">
+                <label class="flex items-center gap-3 text-sm text-slate-200">
+                    <input type="checkbox" id="factory-reset-env" class="h-4 w-4">
+                    Reset general settings <span class="text-xs text-zinc-400">(.env file)</span>
+                </label>
+                <label class="flex items-center gap-3 text-sm text-slate-200">
+                    <input type="checkbox" id="factory-reset-profiles" class="h-4 w-4">
+                    Remove custom profiles <span class="text-xs text-zinc-400">(user profile .ini files)</span>
+                </label>
+                <label class="flex items-center gap-3 text-sm text-slate-200">
+                    <input type="checkbox" id="factory-reset-personas" class="h-4 w-4">
+                    Remove custom personas <span class="text-xs text-zinc-400">(custom persona .ini files)</span>
+                </label>
+                <label class="flex items-center gap-3 text-sm text-slate-200">
+                    <input type="checkbox" id="factory-reset-logs" class="h-4 w-4">
+                    Clear debug logs
+                </label>
+            </div>
+
+            <div id="factory-reset-advanced" class="space-y-3 pt-2 border-t border-zinc-700 hidden">
+                <label class="flex items-center gap-3 text-sm text-slate-200">
+                    <input type="checkbox" id="factory-reset-git" class="h-4 w-4">
+                    Reset software version (restores the billy software codebase)
+                </label>
+                <label class="flex items-center gap-3 text-sm text-slate-200">
+                    <input type="checkbox" id="factory-reset-wifi" class="h-4 w-4">
+                    Remove active wifi credentials
+                </label>
+                <label class="flex items-center gap-3 text-sm text-slate-200">
+                    <input type="checkbox" id="factory-reset-reboot" class="h-4 w-4">
+                    Reboot when done
+                </label>
+            </div>
+
+        </div>
+        <div class="border-t border-zinc-700 p-4 flex flex-row items-center justify-between gap-3">
+            <button id="cancel-factory-reset"
+                    type="button"
+                    class="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white rounded transition-colors">
+                Cancel
+            </button>
+            <button id="toggle-factory-advanced"
+                    type="button"
+                    class="text-sm text-zinc-400 hover:text-white transition-colors">
+                Show advanced settings
+            </button>
+            <button id="confirm-factory-reset"
+                    type="button"
+                    class="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white rounded transition-colors">
+                RESET
+            </button>
+        </div>
+    </div>
+</div>

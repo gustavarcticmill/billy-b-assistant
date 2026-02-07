@@ -1,10 +1,12 @@
 import os
+import shutil
 import subprocess
 
 # Import logger
 import sys
 import threading
 import time
+from pathlib import Path
 
 from dotenv import find_dotenv, set_key
 from flask import Blueprint, jsonify, render_template, request
@@ -60,6 +62,223 @@ CONFIG_KEYS = [
     "SHOW_RC_VERSIONS",
     "FLAP_ON_BOOT",
 ]
+
+
+def _remove_path(path: Path, removed: list[str]) -> None:
+    if not path.exists():
+        return
+    if path.is_dir():
+        shutil.rmtree(path)
+    else:
+        path.unlink()
+    removed.append(str(path))
+
+
+def _remove_env_and_versions() -> dict:
+    removed: dict[str, bool] = {"env": False, "versions": False}
+    errors: list[str] = []
+
+    env_path = Path(ENV_PATH)
+    example_path = Path(PROJECT_ROOT) / ".env.example"
+    if env_path.exists():
+        try:
+            env_path.unlink()
+        except Exception as exc:
+            errors.append(f"Failed to delete .env: {exc}")
+    try:
+        if example_path.exists():
+            shutil.copy(example_path, env_path)
+        else:
+            env_path.touch()
+        removed["env"] = True
+    except Exception as exc:
+        errors.append(f"Failed to reset .env: {exc}")
+
+    versions_path = Path(PROJECT_ROOT) / "versions.ini"
+    if versions_path.exists():
+        try:
+            versions_path.unlink()
+            removed["versions"] = True
+        except Exception as exc:
+            errors.append(f"Failed to delete versions.ini: {exc}")
+
+    return {"removed": removed, "errors": errors}
+
+
+def _remove_custom_profiles() -> dict:
+    removed: list[str] = []
+    errors: list[str] = []
+
+    profiles_dir = Path(PROJECT_ROOT) / "profiles"
+    if profiles_dir.exists():
+        for profile_file in profiles_dir.glob("*.ini"):
+            if (
+                profile_file.name.lower() == "guest.ini"
+                or profile_file.stem.lower() == "guest"
+            ):
+                continue
+            try:
+                _remove_path(profile_file, removed)
+            except Exception as exc:
+                errors.append(f"Failed to delete profile {profile_file}: {exc}")
+
+    return {"removed": removed, "errors": errors}
+
+
+def _remove_custom_personas() -> dict:
+    removed: list[str] = []
+    errors: list[str] = []
+
+    default_persona = Path(PROJECT_ROOT) / "persona.ini"
+    personas_dir = Path(PROJECT_ROOT) / "personas"
+    if personas_dir.exists():
+        for persona_file in personas_dir.glob("*.ini"):
+            if persona_file.stem.lower() == "default":
+                continue
+            try:
+                _remove_path(persona_file, removed)
+            except Exception as exc:
+                errors.append(f"Failed to delete persona file {persona_file}: {exc}")
+        for persona_dir in personas_dir.iterdir():
+            if not persona_dir.is_dir():
+                continue
+            if persona_dir.name.lower() == "default":
+                continue
+            try:
+                _remove_path(persona_dir, removed)
+            except Exception as exc:
+                errors.append(f"Failed to delete persona folder {persona_dir}: {exc}")
+
+    # Always keep the default persona.ini in the project root
+    if default_persona.exists():
+        pass
+
+    return {"removed": removed, "errors": errors}
+
+
+def _clear_service_logs() -> dict:
+    errors: list[str] = []
+    units = ["billy.service", "billy-webconfig.service"]
+    for unit in units:
+        for args in (
+            ["sudo", "journalctl", "-u", unit, "--rotate"],
+            ["sudo", "journalctl", "-u", unit, "--vacuum-time=1s"],
+        ):
+            try:
+                result = subprocess.run(
+                    args, check=False, capture_output=True, text=True
+                )
+                if result.returncode != 0:
+                    stderr = result.stderr.strip() or result.stdout.strip()
+                    errors.append(f"{unit}: {' '.join(args[1:])} failed: {stderr}")
+            except FileNotFoundError:
+                errors.append("journalctl not available")
+                break
+            except Exception as exc:
+                errors.append(f"{unit}: {' '.join(args[1:])} failed: {exc}")
+
+    # Clear CLI history for the user running this service.
+    try:
+        import pwd
+
+        current_user = pwd.getpwuid(os.getuid())
+        current_home = Path(current_user.pw_dir)
+        for history_file in (
+            current_home / ".bash_history",
+            current_home / ".zsh_history",
+        ):
+            if history_file.exists():
+                history_file.write_text("")
+    except Exception as exc:
+        errors.append(f"Failed to clear CLI history: {exc}")
+    return {"errors": errors}
+
+
+def _remove_active_wifi_connections() -> dict:
+    removed: list[str] = []
+    errors: list[str] = []
+    try:
+        logger.info(
+            "[factory_reset] Checking active NetworkManager connections...", "📡"
+        )
+        result = subprocess.run(
+            ["nmcli", "-t", "-f", "NAME,TYPE,DEVICE", "connection", "show", "--active"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip() or result.stdout.strip()
+            errors.append(f"nmcli list failed: {stderr}")
+            logger.warning(f"[factory_reset] nmcli list failed: {stderr}")
+            return {"removed": removed, "errors": errors}
+        logger.info(f"[factory_reset] nmcli active output: {result.stdout.strip()}")
+        for line in result.stdout.splitlines():
+            parts = line.split(":")
+            if len(parts) < 2:
+                continue
+            name, conn_type = parts[0], parts[1]
+            if conn_type not in {"wifi", "802-11-wireless"} or not name:
+                continue
+            logger.info(f"[factory_reset] Deleting Wi-Fi connection: {name}")
+            delete_result = subprocess.run(
+                ["sudo", "nmcli", "connection", "delete", name],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if delete_result.returncode != 0:
+                stderr = delete_result.stderr.strip() or delete_result.stdout.strip()
+                errors.append(f"Failed to delete Wi-Fi '{name}': {stderr}")
+                logger.warning(
+                    f"[factory_reset] Failed to delete Wi-Fi '{name}': {stderr}"
+                )
+                continue
+            removed.append(name)
+            logger.info(f"[factory_reset] Deleted Wi-Fi connection: {name}")
+    except FileNotFoundError:
+        errors.append("nmcli not available")
+        logger.warning("[factory_reset] nmcli not available")
+    except Exception as exc:
+        errors.append(f"Wi-Fi removal failed: {exc}")
+        logger.warning(f"[factory_reset] Wi-Fi removal failed: {exc}")
+    return {"removed": removed, "errors": errors}
+
+
+def _reset_git_worktree() -> dict:
+    errors: list[str] = []
+    details: dict[str, str] = {}
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "HEAD"],
+            cwd=PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            stderr = result.stderr.strip() or result.stdout.strip()
+            errors.append(f"git rev-parse failed: {stderr}")
+            return {"errors": errors, "details": details}
+        head = result.stdout.strip()
+        details["head"] = head
+
+        reset_result = subprocess.run(
+            ["git", "reset", "--hard", head],
+            cwd=PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if reset_result.returncode != 0:
+            stderr = reset_result.stderr.strip() or reset_result.stdout.strip()
+            errors.append(f"git reset --hard failed: {stderr}")
+    except FileNotFoundError:
+        errors.append("git not available")
+    except Exception as exc:
+        errors.append(f"git reset failed: {exc}")
+
+    return {"errors": errors, "details": details}
 
 
 def delayed_restart():
@@ -217,8 +436,12 @@ def get_config():
     config_data = {k: str(getattr(core_config, k, "")) for k in CONFIG_KEYS}
 
     # Add voice options from the current provider
-    current_provider = voice_provider_registry.get_provider()
-    voices = current_provider.get_supported_voices()
+    try:
+        current_provider = voice_provider_registry.get_provider()
+        voices = current_provider.get_supported_voices()
+    except Exception as e:
+        logger.warning(f"[config] No realtime provider available: {e}")
+        voices = []
     config_data["VOICE_OPTIONS"] = voices
 
     # Add user profile information
@@ -523,6 +746,90 @@ def save_env():
         return jsonify({"status": "ok", "message": ".env saved"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/factory-reset", methods=["POST"])
+def factory_reset():
+    data = request.get_json(silent=True) or {}
+    if not data.get("confirm"):
+        return jsonify({"status": "error", "error": "Confirmation required"}), 400
+    options = data.get("options") or {}
+    env_enabled = options.get("env", True)
+    profiles_enabled = options.get("profiles", True)
+    personas_enabled = options.get("personas", True)
+    logs_enabled = options.get("logs", True)
+    wifi_enabled = options.get("wifi", True)
+    git_enabled = options.get("git", True)
+    reboot_enabled = options.get("reboot", True)
+
+    env_results = (
+        _remove_env_and_versions() if env_enabled else {"removed": {}, "errors": []}
+    )
+    profile_results = (
+        _remove_custom_profiles() if profiles_enabled else {"removed": [], "errors": []}
+    )
+    persona_results = (
+        _remove_custom_personas() if personas_enabled else {"removed": [], "errors": []}
+    )
+    log_results = _clear_service_logs() if logs_enabled else {"errors": []}
+    git_results = (
+        _reset_git_worktree() if git_enabled else {"errors": [], "details": {}}
+    )
+    wifi_results = (
+        _remove_active_wifi_connections()
+        if wifi_enabled
+        else {"removed": [], "errors": []}
+    )
+
+    errors = (
+        env_results.get("errors", [])
+        + profile_results.get("errors", [])
+        + persona_results.get("errors", [])
+        + log_results.get("errors", [])
+        + wifi_results.get("errors", [])
+        + git_results.get("errors", [])
+    )
+
+    response = {
+        "status": "ok" if not errors else "partial",
+        "removed": {
+            "env": env_results.get("removed", {}).get("env", False),
+            "versions": env_results.get("removed", {}).get("versions", False),
+            "profiles": profile_results.get("removed", []),
+            "personas": persona_results.get("removed", []),
+        },
+        "logs_cleared": logs_enabled and not log_results.get("errors"),
+        "wifi_removed": wifi_results.get("removed", []),
+        "git_reset": git_enabled and not git_results.get("errors"),
+        "git_details": git_results.get("details", {}),
+        "requested": {
+            "env": env_enabled,
+            "profiles": profiles_enabled,
+            "personas": personas_enabled,
+            "logs": logs_enabled,
+            "wifi": wifi_enabled,
+            "git": git_enabled,
+            "reboot": reboot_enabled,
+        },
+        "errors": errors,
+    }
+    logger.info(f"[factory_reset] Completed with status: {response['status']}")
+    if reboot_enabled and response["status"] == "ok":
+        try:
+            threading.Thread(
+                target=lambda: (
+                    time.sleep(2),
+                    subprocess.Popen(["sudo", "reboot"]),
+                )
+            ).start()
+            response["rebooting"] = True
+        except Exception as exc:
+            response["rebooting"] = False
+            response["errors"].append(f"Failed to reboot: {exc}")
+    else:
+        response["rebooting"] = False
+        response["restarting_services"] = response["status"] == "ok"
+    return jsonify(response)
 
 
 @bp.route("/hostname", methods=["GET", "POST"])

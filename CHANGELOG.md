@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.0.5] — 2026-02-07
+
+### Added
+
+- **MQTT Song Endpoint**: Added MQTT command support to play songs via the `billy/song` topic.
+- **Factory Reset Options**: Added option in the settings to reset configuration. (.env file, user profiles .ini's, custom personas .ini's, logs, git, wifi, reboot)
+
+### Changed
+
+- **Persona Form**: Renamed the identity section and combined voice controls into the “Persona Voice & Expression” area.
+
+### Fixed
+
+- **Provider Startup**: Missing API keys no longer hard-fail startup; a warning is logged and services continue.
+- **Voice Options Load**: Config endpoint now handles missing realtime providers without crashing.
+
+---
+
 ## [2.0.4] — 2025-02-02
 
 ### Added

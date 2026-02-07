@@ -164,6 +164,155 @@ const SettingsForm = (() => {
         });
     };
 
+    const bindFactoryReset = () => {
+        const resetBtn = document.getElementById("factory-reset-btn");
+        const resetBtnWrapper = document.getElementById("factory-reset-btn-wrapper");
+        const resetCard = document.getElementById("reset-defaults-card");
+        const modal = document.getElementById("factory-reset-modal");
+        const closeBtn = document.getElementById("close-factory-reset-modal");
+        const cancelBtn = document.getElementById("cancel-factory-reset");
+        const confirmBtn = document.getElementById("confirm-factory-reset");
+        const envCheckbox = document.getElementById("factory-reset-env");
+        const profilesCheckbox = document.getElementById("factory-reset-profiles");
+        const personasCheckbox = document.getElementById("factory-reset-personas");
+        const logsCheckbox = document.getElementById("factory-reset-logs");
+        const gitCheckbox = document.getElementById("factory-reset-git");
+        const wifiCheckbox = document.getElementById("factory-reset-wifi");
+        const rebootCheckbox = document.getElementById("factory-reset-reboot");
+        const advancedWrap = document.getElementById("factory-reset-advanced");
+        const advancedToggle = document.getElementById("toggle-factory-advanced");
+
+        if (!resetBtn || !resetBtnWrapper) return;
+        if (!modal || !closeBtn || !cancelBtn || !confirmBtn) return;
+        if (wifiCheckbox && rebootCheckbox) {
+            wifiCheckbox.addEventListener("change", () => {
+                if (wifiCheckbox.checked) {
+                    rebootCheckbox.checked = true;
+                    rebootCheckbox.disabled = true;
+                } else {
+                    rebootCheckbox.disabled = false;
+                }
+            });
+        }
+        if (advancedWrap && advancedToggle) {
+            advancedToggle.addEventListener("click", () => {
+                const isHidden = advancedWrap.classList.contains("hidden");
+                advancedWrap.classList.toggle("hidden", !isHidden);
+                advancedToggle.textContent = isHidden
+                    ? "Hide advanced settings"
+                    : "Show advanced settings";
+            });
+        }
+
+        const openModal = () => {
+            modal.classList.remove("hidden");
+        };
+        const closeModal = () => {
+            modal.classList.add("hidden");
+        };
+
+        if (resetCard) {
+            resetCard.addEventListener("click", (e) => {
+                const isHidden = resetBtnWrapper.classList.contains("hidden");
+                if (isHidden) {
+                    resetBtnWrapper.classList.remove("hidden");
+                } else {
+                    resetBtnWrapper.classList.add("hidden");
+                }
+            });
+        }
+
+        resetBtn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            openModal();
+        });
+
+        closeBtn.addEventListener("click", closeModal);
+        cancelBtn.addEventListener("click", closeModal);
+        modal.addEventListener("click", (e) => {
+            if (e.target === modal) closeModal();
+        });
+
+        confirmBtn.addEventListener("click", async () => {
+            const options = {
+                env: envCheckbox?.checked ?? false,
+                profiles: profilesCheckbox?.checked ?? false,
+                personas: personasCheckbox?.checked ?? false,
+                logs: logsCheckbox?.checked ?? false,
+                git: gitCheckbox?.checked ?? false,
+                wifi: wifiCheckbox?.checked ?? false,
+                reboot: rebootCheckbox?.checked ?? false,
+            };
+
+            const anySelected = Object.values(options).some(Boolean);
+            if (!anySelected) {
+                showNotification("Select at least one reset option.", "warning", 4000);
+                return;
+            }
+
+            confirmBtn.disabled = true;
+            confirmBtn.classList.add("opacity-50", "cursor-not-allowed");
+            resetBtn.disabled = true;
+            resetBtn.classList.add("opacity-50", "cursor-not-allowed");
+            showNotification("Running reset to defaults...", "warning", 4000);
+
+            try {
+                const response = await fetch("/factory-reset", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({confirm: true, options}),
+                });
+                const data = await response.json();
+
+                if (response.ok && data.status === "ok") {
+                    const summary = [];
+                    if (data.removed?.env) summary.push(".env");
+                    if (data.removed?.versions) summary.push("versions.ini");
+                    if (data.removed?.profiles?.length) summary.push(`${data.removed.profiles.length} profile(s)`);
+                    if (data.requested?.personas) {
+                        const personaCount = data.removed?.personas?.length || 0;
+                        summary.push(`${personaCount} persona(s)`);
+                    }
+                    if (data.logs_cleared) summary.push("service logs");
+                    if (data.git_reset) summary.push("git worktree");
+                    if (data.requested?.wifi) {
+                        summary.push("Wi-Fi connection");
+                    }
+                    const msg = summary.length
+                        ? `Reset to defaults complete: ${summary.join(", ")}`
+                        : "Reset to defaults complete.";
+                    let postfix = "";
+                    if (data.rebooting) {
+                        postfix = " Rebooting now...";
+                    } else if (data.restarting_services) {
+                        postfix = " Restarting UI...";
+                    }
+                    showNotification(`${msg}${postfix}`, "success", 6000);
+                    if (data.restarting_services) {
+                        try {
+                            await fetch("/restart", {method: "POST"});
+                            setTimeout(() => location.reload(), 3000);
+                        } catch (restartErr) {
+                            console.error("Failed to restart UI:", restartErr);
+                        }
+                    }
+                    closeModal();
+                } else {
+                    const errors = data.errors?.length ? data.errors.join("; ") : (data.error || "Reset to defaults incomplete");
+                    showNotification(errors, "error", 8000);
+                }
+            } catch (error) {
+                console.error("Reset to defaults failed:", error);
+                showNotification("Reset to defaults failed", "error", 6000);
+            } finally {
+                confirmBtn.disabled = false;
+                confirmBtn.classList.remove("opacity-50", "cursor-not-allowed");
+                resetBtn.disabled = false;
+                resetBtn.classList.remove("opacity-50", "cursor-not-allowed");
+            }
+        });
+    };
+
     fetch('/hostname')
         .then(res => res.json())
         .then(data => {
@@ -237,7 +386,14 @@ const SettingsForm = (() => {
         });
     };
 
-    return {handleSettingsSave, populateDropdowns, saveDropdownSelections, initMouthArticulationSlider, refreshFromConfig};
+    return {
+        handleSettingsSave,
+        populateDropdowns,
+        saveDropdownSelections,
+        initMouthArticulationSlider,
+        refreshFromConfig,
+        bindFactoryReset,
+    };
 })();
 
 // Make SettingsForm globally available

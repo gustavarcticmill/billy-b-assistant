@@ -26,6 +26,7 @@ def on_connect(client, userdata, flags, rc):
         mqtt_send_discovery()
         client.subscribe("billy/command")
         client.subscribe("billy/say")  # single endpoint
+        client.subscribe("billy/song")
     else:
         logger.warning(f"MQTT connection failed with code {rc}")
 
@@ -137,6 +138,21 @@ def mqtt_send_discovery():
         retain=True,
     )
 
+    # Single text entity for playing songs
+    payload_song_input = {
+        "name": "Billy Song",
+        "unique_id": "billy_song",
+        "command_topic": "billy/song",
+        "mode": "text",
+        "max": 255,
+        "device": device,
+    }
+    mqtt_client.publish(
+        "homeassistant/text/billy/song/config",
+        json.dumps(payload_song_input),
+        retain=True,
+    )
+
 
 # ----- Helpers ----------------------------------------------------------
 
@@ -180,6 +196,19 @@ def _parse_say_payload(raw: str):
             text = re_sub_ignorecase(text, tag, "")
 
     return text.strip(), interactive
+
+
+def _parse_song_payload(raw: str) -> str:
+    """Accept raw text or JSON: {"song":"..."}; returns song name or empty string."""
+    s = raw.strip()
+    song = s
+    try:
+        data = json.loads(s)
+        if isinstance(data, dict):
+            song = str(data.get("song", "")).strip()
+    except json.JSONDecodeError:
+        pass
+    return song.strip()
 
 
 def re_sub_ignorecase(s: str, find: str, repl: str) -> str:
@@ -235,3 +264,17 @@ def on_message(client, userdata, msg):
                 print("⚠️ SAY command received, but text was empty")
         except Exception as e:
             logger.error(f"Failed to run say(): {e}")
+        return
+
+    if msg.topic == "billy/song":
+        print(f"📩 Received SONG command: {msg.payload.decode()}")
+        try:
+            from .audio import play_song
+
+            song_name = _parse_song_payload(msg.payload.decode())
+            if song_name:
+                _run_async(play_song(song_name))
+            else:
+                print("⚠️ SONG command received, but song name was empty")
+        except Exception as e:
+            logger.error(f"Failed to run play_song(): {e}")

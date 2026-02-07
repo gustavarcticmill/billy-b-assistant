@@ -66,6 +66,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     SettingsForm.saveDropdownSelections();
     SettingsForm.populateDropdowns(cfg);
     SettingsForm.initMouthArticulationSlider();
+    SettingsForm.bindFactoryReset();
     PersonaForm.handlePersonaSave();
     PersonaForm.bindPersonaSelector();
     PersonaForm.populatePersonaSelector();
@@ -98,5 +99,4 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.PersonaForm.initCreatePersonaModal();
     }
 });
-
 
