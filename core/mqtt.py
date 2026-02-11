@@ -123,6 +123,34 @@ def mqtt_send_discovery():
         retain=True,
     )
 
+    # Button to restart Billy service
+    payload_button_restart = {
+        "name": "Billy Restart",
+        "unique_id": "billy_restart",
+        "command_topic": "billy/command",
+        "payload_press": "restart-billy",
+        "device": device,
+    }
+    mqtt_client.publish(
+        "homeassistant/button/billy/restart/config",
+        json.dumps(payload_button_restart),
+        retain=True,
+    )
+
+    # Button to reboot the system
+    payload_button_reboot = {
+        "name": "Billy Reboot",
+        "unique_id": "billy_reboot",
+        "command_topic": "billy/command",
+        "payload_press": "reboot",
+        "device": device,
+    }
+    mqtt_client.publish(
+        "homeassistant/button/billy/reboot/config",
+        json.dumps(payload_button_reboot),
+        retain=True,
+    )
+
     # Single text entity
     payload_text_input = {
         "name": "Billy Say",
@@ -241,6 +269,26 @@ def on_message(client, userdata, msg):
                 logger.warning(f"Error stopping motors: {e}")
             stop_mqtt()
             subprocess.Popen(["sudo", "shutdown", "now"])
+
+        elif command == "restart-billy":
+            logger.warning(
+                "Restart Billy command received over MQTT. Restarting service...", "🔁"
+            )
+            try:
+                stop_all_motors()
+            except Exception as e:
+                logger.warning(f"Error stopping motors: {e}")
+            subprocess.Popen(["sudo", "systemctl", "restart", "billy.service"])
+        elif command == "reboot":
+            logger.warning(
+                "Reboot command received over MQTT. Rebooting system...", "🔁"
+            )
+            try:
+                stop_all_motors()
+            except Exception as e:
+                logger.warning(f"Error stopping motors: {e}")
+            stop_mqtt()
+            subprocess.Popen(["sudo", "shutdown", "-r", "now"])
         return
 
     if msg.topic == "billy/say":
