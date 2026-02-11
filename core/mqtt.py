@@ -2,6 +2,7 @@ import asyncio
 import json
 import subprocess
 import threading
+import time
 
 import paho.mqtt.client as mqtt
 
@@ -41,12 +42,19 @@ def start_mqtt():
     mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
-    try:
-        mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
-        mqtt_client.loop_start()
-        mqtt_publish("billy/state", "idle", retain=True)
-    except Exception as e:
-        logger.error(f"MQTT connection error: {e}")
+    
+    def connect_with_retry():
+        while True:
+            try:
+                mqtt_client.connect(MQTT_HOST, MQTT_PORT, 60)
+                mqtt_client.loop_start()
+                mqtt_publish("billy/state", "idle", retain=True)
+                return
+            except Exception as e:
+                logger.error(f"MQTT connection error: {e}")
+                time.sleep(5)
+
+    threading.Thread(target=connect_with_retry, daemon=True).start()
 
 
 def stop_mqtt():
