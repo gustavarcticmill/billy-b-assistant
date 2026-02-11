@@ -159,6 +159,20 @@ def mqtt_send_discovery():
         retain=True,
     )
 
+    # Button to toggle listening
+    payload_button_listen = {
+        "name": "Billy Listen",
+        "unique_id": "billy_listen",
+        "command_topic": "billy/command",
+        "payload_press": "listen",
+        "device": device,
+    }
+    mqtt_client.publish(
+        "homeassistant/button/billy/listen/config",
+        json.dumps(payload_button_listen),
+        retain=True,
+    )
+
     # Single text entity
     payload_text_input = {
         "name": "Billy Say",
@@ -259,6 +273,87 @@ def _run_async(coro):
 
     threading.Thread(target=_runner, daemon=True).start()
 
+# Helper functions for toggle listening
+def mqtt_toggle_listening():
+    from . import button as button_mod
+
+    if button_mod.is_active:
+        mqtt_stop_listening()
+    else:
+        mqtt_start_listening()
+
+def mqtt_start_listening():
+    from . import button as button_mod
+    import contextlib
+    import time
+
+    if button_mod.is_active:
+        return
+
+    if not button_mod._session_start_lock.acquire(blocking=False):
+        logger.warning("Session start already in progress, ignoring MQTT start", "⚠️")
+        return
+
+    try:
+        if button_mod.session_thread and button_mod.session_thread.is_alive():
+            button_mod.session_thread.join(timeout=2.0)
+            if button_mod.session_thread.is_alive():
+                logger.error("Previous session thread did not finish, aborting new session", "❌")
+                button_mod._session_start_lock.release()
+                return
+
+        button_mod.audio.ensure_playback_worker_started(button_mod.config.CHUNK_MS)
+        button_mod.audio.playback_done_event.clear()
+        threading.Thread(target=button_mod.audio.play_random_wake_up_clip, daemon=True).start()
+
+        button_mod.is_active = True
+        button_mod.interrupt_event = threading.Event()
+
+        def run_session():
+            try:
+                button_mod.move_head("on")
+                button_mod.session_instance = button_mod.BillySession(
+                    interrupt_event=button_mod.interrupt_event
+                )
+                button_mod.session_instance.last_activity[0] = time.time()
+                asyncio.run(button_mod.session_instance.start())
+            finally:
+                button_mod.move_head("off")
+                button_mod.is_active = False
+                button_mod.session_instance = None
+                with contextlib.suppress(Exception):
+                    button_mod._session_start_lock.release()
+
+        button_mod.session_thread = threading.Thread(target=run_session, daemon=True)
+        button_mod.session_thread.start()
+    except Exception:
+        with contextlib.suppress(Exception):
+            button_mod._session_start_lock.release()
+        raise
+
+def mqtt_stop_listening():
+    from . import button as button_mod
+    import contextlib
+    from concurrent.futures import CancelledError
+
+    if not button_mod.is_active:
+        return
+
+    button_mod.interrupt_event.set()
+    button_mod.audio.stop_playback()
+
+    if button_mod.session_instance:
+        with contextlib.suppress(CancelledError):
+            future = asyncio.run_coroutine_threadsafe(
+                button_mod.session_instance.stop_session(),
+                button_mod.session_instance.loop,
+            )
+            try:
+                future.result(timeout=5.0)
+            except TimeoutError:
+                future.cancel()
+                
+    button_mod.is_active = False
 
 # -----------------------------------------------------------------------
 
@@ -297,6 +392,14 @@ def on_message(client, userdata, msg):
                 logger.warning(f"Error stopping motors: {e}")
             stop_mqtt()
             subprocess.Popen(["sudo", "shutdown", "-r", "now"])
+        elif command == "listen":
+            logger.warning(
+                "Listen command received over MQTT. Starting or stopping listening...", "🔁"
+            )
+            try:
+                mqtt_toggle_listening()
+            except Exception as e:
+                logger.warning(f"Error starting/stopping listening: {e}")
         return
 
     if msg.topic == "billy/say":
