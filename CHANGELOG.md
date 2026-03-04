@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.0.6] — 2026-03-05
+
+### Fixed
+
+- **Version Detection**: Fixed bug where pre-release/RC tags would still show up even if `SHOW_RC_VERSIONS=false`
+
+---
+
 ## [2.0.5] — 2026-02-07
 
 ### Added
