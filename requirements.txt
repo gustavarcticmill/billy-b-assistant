@@ -10,5 +10,7 @@ requests
 openai
 aiohttp
 flask
+flask-sock
+simple-websocket
 lgpio
 packaging

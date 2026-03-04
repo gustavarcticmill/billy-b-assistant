@@ -1,6 +1,6 @@
 // ===================== Header Secondary Actions (Log Panel) =====================
 const LogPanel = (() => {
-    let autoScrollEnabled = false;
+    let autoScrollEnabled = true;  // Start with auto-scroll enabled
     let isLogHidden = true;
     let isEnvHidden = true;
     let isReleaseHidden = true;
@@ -36,21 +36,6 @@ const LogPanel = (() => {
         } catch (err) {
             console.error("Failed to shutdown Billy:", err);
             showNotification("Failed to shutdown Billy", "error");
-        }
-    };
-
-    const restartUI = async () => {
-        try {
-            const res = await fetch('/restart', {method: 'POST'});
-            const data = await res.json();
-            if (data.status === "ok") {
-                showNotification("Restarting UI…", "success");
-                setTimeout(() => location.reload(), 3000);
-            } else {
-                showNotification(data.error || "Restart failed", "error");
-            }
-        } catch (err) {
-            showNotification(err.message, "error");
         }
     };
 
@@ -185,17 +170,45 @@ const LogPanel = (() => {
     };
 
     const fetchLogs = async () => {
-        const res = await fetch("/logs");
-        const data = await res.json();
-        const logOutput = document.getElementById("log-output");
-        const logContainer = document.getElementById("log-container");
-        logOutput.textContent = data.logs || "No logs found.";
+        try {
+            const res = await fetch("/logs");
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            updateLogsUI(data.logs || "No logs found.");
+            return data;
+        } catch (err) {
+            const serviceStatusApi =
+                window.ServiceStatus ||
+                (typeof ServiceStatus !== "undefined" ? ServiceStatus : null);
+            const restartInProgress =
+                serviceStatusApi &&
+                typeof serviceStatusApi.isRestartInProgress === "function" &&
+                serviceStatusApi.isRestartInProgress();
+
+            if (restartInProgress) {
+                updateLogsUI("Restart in progress... waiting for logs to reconnect.");
+                return {logs: ""};
+            }
+
+            console.error("Failed to fetch logs:", err);
+            return {logs: ""};
+        }
+    };
+
+    const updateLogsUI = (logs) => {
+        if (!elements.logOutput || !elements.logContainer) return;
+        elements.logOutput.textContent = logs;
         if (autoScrollEnabled) {
             requestAnimationFrame(() => {
-                logContainer.scrollTop = logContainer.scrollHeight;
+                elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
             });
         }
     };
+
+    // Expose for WebSocket
+    window.updateLogs = updateLogsUI;
 
     const toggleLogPanel = () => {
         isLogHidden = !isLogHidden;
@@ -316,7 +329,7 @@ const LogPanel = (() => {
         elements.scrollBtn.classList.toggle("bg-zinc-800", !autoScrollEnabled);
         elements.scrollBtn.title = autoScrollEnabled ? "Auto-scroll ON" : "Auto-scroll OFF";
         if (autoScrollEnabled) {
-            elements.logOutput.scrollTop = elements.logOutput.scrollHeight;
+            elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
         }
     };
 
@@ -380,7 +393,6 @@ const LogPanel = (() => {
             powerBtn: document.getElementById("power-btn"),
             powerDropdown: document.getElementById("power-dropdown"),
             rebootBillyBtn: document.getElementById("reboot-billy-btn"),
-            restartUIBtn: document.getElementById("restart-ui-btn"),
             shutdownBillyBtn: document.getElementById("shutdown-billy-btn"),
             toggleReleaseBtn: document.getElementById("current-version"),
             releasePanel: document.getElementById("release-panel"),
@@ -415,7 +427,6 @@ const LogPanel = (() => {
         elements.saveEnvBtn.addEventListener("click", saveEnv);
         
         elements.rebootBillyBtn.addEventListener("click", rebootBilly);
-        elements.restartUIBtn.addEventListener("click", restartUI);
         elements.shutdownBillyBtn.addEventListener("click", shutdownBilly);
         
         // Log level control

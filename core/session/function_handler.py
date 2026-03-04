@@ -1,0 +1,323 @@
+"""Function call handler for routing AI function calls to implementations."""
+
+import asyncio
+import json
+import time
+from typing import Any
+
+from ..config import PERSONALITY
+from ..ha import send_conversation_prompt
+from ..logger import logger
+from ..persona import update_persona_ini
+from ..persona_manager import persona_manager
+
+
+class FunctionHandler:
+    """Handles routing and execution of function calls."""
+
+    def __init__(self, session):
+        self.session = session
+
+    async def handle(
+        self, function_name: str, raw_args: str | None, call_id: str | None = None
+    ):
+        """Route function call to appropriate handler."""
+        handlers = {
+            "conversation_state": self._handle_conversation_state,
+            "update_personality": self._handle_update_personality,
+            "play_song": self._handle_play_song,
+            "smart_home_command": self._handle_smart_home_command,
+            "identify_user": self._handle_identify_user,
+            "store_memory": self._handle_store_memory,
+            "manage_profile": self._handle_manage_profile,
+            "switch_persona": self._handle_switch_persona,
+        }
+
+        handler = handlers.get(function_name)
+        if not handler:
+            logger.warning(f"No handler for function: {function_name}")
+            return
+
+        try:
+            await handler(raw_args, call_id)
+        except Exception as e:
+            logger.error(f"Function {function_name} failed: {e}")
+
+    def _parse_json_args(self, raw_args: str | None, tool_name: str) -> dict:
+        """Parse JSON arguments with fallback for malformed JSON."""
+        raw_args = raw_args or "{}"
+        try:
+            return json.loads(raw_args)
+        except Exception as e:
+            try:
+                import re
+
+                fixed_json = raw_args
+                fixed_json = re.sub(
+                    r'{"([^"]*):([^"}]*)([}])', r'{"\\1": \\2\\3', fixed_json
+                )
+                fixed_json = re.sub(r':(true|false)([},])', r': \\1\\2', fixed_json)
+                args = json.loads(fixed_json)
+                logger.info(
+                    f"{tool_name}: fixed malformed JSON | original={raw_args!r} | fixed={fixed_json!r}",
+                    "🔧",
+                )
+                return args
+            except Exception as fix_e:
+                logger.warning(
+                    f"{tool_name}: failed to parse arguments: {e} | raw={raw_args!r} | fix also failed: {fix_e}"
+                )
+                return {}
+
+    @staticmethod
+    def _coerce_bool(value: Any, default: bool = False) -> bool:
+        """Safely coerce common JSON-ish bool representations."""
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y", "on"}:
+                return True
+            if normalized in {"false", "0", "no", "n", "off", ""}:
+                return False
+            return default
+        if isinstance(value, (int, float)):
+            return bool(value)
+        return default
+
+    async def _handle_conversation_state(
+        self, raw_args: str | None, call_id: str | None = None
+    ):
+        """Handle conversation state (internal)."""
+        args = self._parse_json_args(raw_args, "conversation_state")
+        self.session.state.follow_up_expected = self._coerce_bool(
+            args.get("expects_follow_up", False), default=False
+        )
+        self.session.state.follow_up_prompt = args.get("suggested_prompt") or None
+        self.session.state._saw_follow_up_call = True
+
+        if logger.get_level().name == "VERBOSE":
+            logger.verbose(
+                f"conversation_state | expects_follow_up={self.session.state.follow_up_expected}"
+                f" | suggested_prompt={self.session.state.follow_up_prompt!r}"
+                f" | reason={args.get('reason')!r}",
+                "🧭",
+            )
+
+    async def _handle_update_personality(
+        self, raw_args: str | None, call_id: str | None = None
+    ):
+        """Handle personality update."""
+        args = self._parse_json_args(raw_args, "update_personality")
+        changes = []
+
+        current_persona = persona_manager.current_persona
+        if current_persona == "default":
+            persona_file_path = "persona.ini"
+        else:
+            from pathlib import Path
+
+            personas_dir = Path("personas")
+            persona_file_path = personas_dir / current_persona / "persona.ini"
+            if not persona_file_path.exists():
+                persona_file_path = personas_dir / f"{current_persona}.ini"
+
+        logger.info(
+            f"Updating personality for persona: {current_persona}, file: {persona_file_path}",
+            "🎛️",
+        )
+
+        level_to_value = {'min': 7, 'low': 24, 'med': 49, 'high': 74, 'max': 92}
+
+        for trait, val in args.items():
+            if hasattr(PERSONALITY, trait):
+                if isinstance(val, int):
+                    numeric_val = val
+                elif isinstance(val, str) and val.lower() in level_to_value:
+                    numeric_val = level_to_value[val.lower()]
+                else:
+                    continue
+
+                setattr(PERSONALITY, trait, numeric_val)
+                update_persona_ini(trait, numeric_val, str(persona_file_path))
+                changes.append((trait, numeric_val))
+
+        if changes:
+            print("\n🎛️ Personality updated via function_call:")
+            for trait, val in changes:
+                level = PERSONALITY._bucket(val)
+                print(f"  - {trait.capitalize()}: {val}% ({level.upper()})")
+
+            self.session.state.full_response_text = ""
+            self.session.last_activity[0] = time.time()
+
+            if call_id:
+                changes_summary = ", ".join([
+                    f"{trait}={PERSONALITY._bucket(val).upper()}"
+                    for trait, val in changes
+                ])
+                await self.session._ws_send_json({
+                    "type": "conversation.item.create",
+                    "item": {
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": json.dumps({
+                            "status": "success",
+                            "changes": changes_summary,
+                        }),
+                    },
+                })
+                await asyncio.sleep(0.1)
+
+            confirmation_text = " ".join([
+                f"Okay, {trait} is now set to {PERSONALITY._bucket(val).upper()}."
+                for trait, val in changes
+            ])
+            await self.session._ws_send_json({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": confirmation_text}],
+                },
+            })
+            self.session.state._triggered_new_response = True
+            await self.session._ws_send_json({"type": "response.create"})
+
+    async def _handle_play_song(self, raw_args: str | None, call_id: str | None = None):
+        """Handle song playback."""
+        from .. import audio
+
+        args = self._parse_json_args(raw_args, "play_song")
+        song_name = args.get("song")
+        if song_name:
+            logger.info(f"Assistant requested to play song: {song_name}", "🎵")
+            await self.session.stop_session()
+            await asyncio.sleep(1.0)
+            await audio.play_song(
+                song_name, interrupt_event=self.session.interrupt_event
+            )
+
+    async def _handle_smart_home_command(
+        self, raw_args: str | None, call_id: str | None = None
+    ):
+        """Handle Home Assistant command."""
+        args = self._parse_json_args(raw_args, "smart_home_command")
+        prompt = args.get("prompt")
+        if not prompt:
+            return
+
+        logger.info(f"Sending to Home Assistant Conversation API: {prompt}", "🏠")
+        ha_response = await send_conversation_prompt(prompt)
+        speech_text = None
+
+        if isinstance(ha_response, dict):
+            speech_text = ha_response.get("speech", {}).get("plain", {}).get("speech")
+            if speech_text:
+                logger.verbose(f"HA debug: {ha_response.get('data')}", "🔍")
+                print(f"\n📣 Home Assistant says: {speech_text}")
+
+            if call_id:
+                await self.session._ws_send_json({
+                    "type": "conversation.item.create",
+                    "item": {
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": json.dumps({
+                            "status": "success",
+                            "response": speech_text,
+                        }),
+                    },
+                })
+                await asyncio.sleep(0.1)
+
+            confirmation_prompt = f"Home Assistant completed the task: '{speech_text}'. Confirm this out loud to the user."
+            await self.session._ws_send_json({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": confirmation_prompt}],
+                },
+            })
+            self.session.state._triggered_new_response = True
+            await self.session._ws_send_json({"type": "response.create"})
+        else:
+            logger.warning(f"Failed to parse HA response: {ha_response}")
+            if call_id:
+                await self.session._ws_send_json({
+                    "type": "conversation.item.create",
+                    "item": {
+                        "type": "function_call_output",
+                        "call_id": call_id,
+                        "output": json.dumps({
+                            "status": "error",
+                            "message": "Home Assistant didn't understand the request",
+                        }),
+                    },
+                })
+                await asyncio.sleep(0.1)
+
+            await self.session._ws_send_json({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": "Home Assistant didn't understand the request.",
+                        }
+                    ],
+                },
+            })
+            self.session.state._triggered_new_response = True
+            await self.session._ws_send_json({"type": "response.create"})
+
+    async def _handle_identify_user(
+        self, raw_args: str | None, call_id: str | None = None
+    ):
+        """Handle user identification."""
+        args = self._parse_json_args(raw_args, "identify_user")
+        await self.session.user_handler.handle_identify_user(args, call_id)
+
+    async def _handle_store_memory(
+        self, raw_args: str | None, call_id: str | None = None
+    ):
+        """Handle memory storage."""
+        args = self._parse_json_args(raw_args, "store_memory")
+        await self.session.user_handler.handle_store_memory(args, call_id)
+
+    async def _handle_manage_profile(
+        self, raw_args: str | None, call_id: str | None = None
+    ):
+        """Handle profile management."""
+        args = self._parse_json_args(raw_args, "manage_profile")
+        await self.session.persona_handler.handle_manage_profile(args)
+
+    async def _handle_switch_persona(
+        self, raw_args: str | None, call_id: str | None = None
+    ):
+        """Handle persona switching mid-session."""
+        args = self._parse_json_args(raw_args, "switch_persona")
+        await self.session.persona_handler.handle_switch_persona(args)
+
+    # Helper method (kept for backward compatibility with update_personality handler)
+    async def _update_session_with_user_context(self):
+        """Update the session with current user context."""
+        if not self.session.ws:
+            return
+
+        try:
+            from ..session_manager import get_instructions_with_user_context
+
+            await self.session._ws_send_json({
+                "type": "session.update",
+                "session": {
+                    "type": "realtime",
+                    "instructions": get_instructions_with_user_context(),
+                },
+            })
+            logger.info("Updated session with user context", "👤")
+        except Exception as e:
+            logger.warning(f"Failed to update session with user context: {e}")

@@ -19,7 +19,6 @@ const SettingsForm = (() => {
                 const savedValue = localStorage.getItem(`dropdown_${id}`);
                 // Then fall back to config value
                 const configValue = cfg[key];
-                // Use saved value if it exists, otherwise use config value
                 const valueToSet = savedValue || configValue;
                 
                 if (valueToSet) {
@@ -32,7 +31,7 @@ const SettingsForm = (() => {
     const saveDropdownSelections = () => {
         // Save dropdown selections to localStorage when they change
         const dropdowns = [
-            'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS', 
+            'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS',
             'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG'
         ];
 
@@ -123,7 +122,7 @@ const SettingsForm = (() => {
                     if (refreshData.config) {
                         // Update dropdowns with new values
                         const dropdowns = [
-                            'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS', 
+                            'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS',
                             'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG'
                         ];
                         dropdowns.forEach(id => {
@@ -374,7 +373,7 @@ const SettingsForm = (() => {
     const refreshFromConfig = (config) => {
         // Update dropdowns with new configuration values
         const dropdowns = [
-            'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS', 
+            'OPENAI_MODEL', 'VOICE', 'RUN_MODE', 'TURN_EAGERNESS',
             'BILLY_MODEL', 'BILLY_PINS_SELECT', 'HA_LANG'
         ];
         dropdowns.forEach(id => {

@@ -11,6 +11,7 @@ from .movements import move_head, move_tail
 
 try:
     from gpiozero import Button
+    from gpiozero.mixins import HoldThread
 
     gpiozero_available = True
 except ImportError:
@@ -57,7 +58,7 @@ if config.MOCKFISH or not gpiozero_available:
 
     Button = MockButton
 from .movements import move_head
-from .session import BillySession
+from .session_manager import BillySession
 
 
 # Button and session globals
@@ -71,6 +72,19 @@ _session_start_lock = threading.Lock()  # Lock to prevent concurrent session sta
 
 # Setup hardware button
 button = Button(config.BUTTON_PIN, pull_up=True)
+
+
+def _ensure_button_hold_thread():
+    """Work around rare gpiozero race where _hold_thread becomes None."""
+    if config.MOCKFISH or not gpiozero_available:
+        return
+    try:
+        hold_thread = getattr(button, "_hold_thread", None)
+        if hold_thread is None:
+            button._hold_thread = HoldThread(button)
+            logger.warning("Repaired gpiozero button hold thread", "🛠️")
+    except Exception as e:
+        logger.warning(f"Failed to repair button hold thread: {e}", "⚠️")
 
 
 def is_billy_speaking():
@@ -98,6 +112,22 @@ def on_button():
 
     if is_active:
         logger.info("Button pressed during active session.", "🔁")
+        if (
+            session_instance
+            and session_instance.loop
+            and session_instance.is_assistant_turn()
+        ):
+            try:
+                logger.info("Assistant is speaking. Handing turn back to user...", "🎙️")
+                future = asyncio.run_coroutine_threadsafe(
+                    session_instance.interrupt_to_user_turn(), session_instance.loop
+                )
+                future.result(timeout=3.0)
+                logger.success("Turn handed back to user (mic open).")
+                return
+            except Exception as e:
+                logger.warning(f"Turn handoff failed, stopping session instead: {e}")
+
         interrupt_event.set()
         audio.stop_playback()
 
@@ -162,7 +192,6 @@ def on_button():
         def run_session():
             global session_instance, is_active
             try:
-                move_head("on")
                 session_instance = BillySession(interrupt_event=interrupt_event)
                 session_instance.last_activity[0] = time.time()
                 asyncio.run(session_instance.start())
@@ -189,6 +218,7 @@ def on_button():
 
 def start_loop():
     audio.detect_devices(debug=config.DEBUG_MODE)
+    _ensure_button_hold_thread()
 
     if config.FLAP_ON_BOOT:
         logger.info("Starting Billy startup animation", "🎭")
@@ -218,4 +248,5 @@ def start_loop():
             pass
     else:
         while True:
+            _ensure_button_hold_thread()
             time.sleep(0.1)

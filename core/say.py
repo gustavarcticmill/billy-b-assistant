@@ -10,7 +10,7 @@ def _classify_kind(text: str) -> tuple[Literal["prompt", "literal", "raw"], str]
 
 async def say(text: str, *, interactive: Optional[bool] = None):
     # 🔁 Lazy import to avoid: session -> mqtt -> say -> session
-    from .session import BillySession
+    from .session_manager import BillySession
 
     kind, cleaned = _classify_kind(text)
 

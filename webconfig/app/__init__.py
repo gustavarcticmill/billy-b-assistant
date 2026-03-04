@@ -2,6 +2,7 @@ import os
 import sys
 
 from flask import Flask
+from flask_sock import Sock
 
 
 def create_app() -> Flask:
@@ -17,7 +18,11 @@ def create_app() -> Flask:
         static_folder=os.path.join(base_dir, "..", "static"),
     )
 
+    # Initialize WebSocket support
+    sock = Sock(app)
+
     # Late imports to avoid circulars
+    from . import websocket
     from .routes.audio import bp as audio_bp
     from .routes.misc import bp as misc_bp
     from .routes.persona import bp as persona_bp
@@ -36,5 +41,9 @@ def create_app() -> Flask:
     app.register_blueprint(audio_bp)
     app.register_blueprint(misc_bp)
     app.register_blueprint(songs_bp)
+
+    # Register WebSocket routes
+    websocket.sock.init_app(app)
+    app.register_blueprint(websocket.bp)
 
     return app

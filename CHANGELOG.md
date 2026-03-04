@@ -4,6 +4,28 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.0.7] — 2026-03-05
+
+### Changed
+
+- **Restart Controls (Web UI)**: Removed the separate **Restart UI** button to avoid confusion. The remaining **Restart** button now performs the same full restart behavior as the old Restart UI action, restarting both `billy.service` and `billy-webconfig.service`.
+
+## [2.0.6] — 2026-03-05
+
+### Changed
+
+- **WebSocket Integration**: Replaced HTTP polling with WebSocket for real-time status and log updates in the Web UI, significantly reducing network overhead and improving responsiveness.
+- **Listening State Feedback**: Updated head movement timing so the head moves out when Billy is actually listening, rather than during the wake-up clip.
+
+### Fixed
+
+- **Service Status Endpoint**: Fixed `/service/status` returning HTTP 500 when `billy.service` is inactive (for example during mic/speaker tests). The endpoint now reports inactive/failed states correctly instead of crashing.
+- **Manual Interrupt Flow**: Simplified interruption handling back to button-first behavior. During a session, one press now interrupts the current response and reopens the mic, while a second press stops the session.
+- **Session Audio Stability**: Improved wake-up-to-listening handoff so Billy more reliably waits for the wake-up sound to finish before opening the mic, reducing stuck startup states and false early listening behavior.
+- **Listening and Shutdown Reliability**: Refined mic/session cleanup and state transitions to reduce hanging stops, duplicate stop handling, and noisy shutdown behavior during follow-up and retry flows.
+- **User Greeting**: Fixed asyncio.sleep calls in user identification flow that prevented Billy from acknowledging new user profiles.
+- **Wake-up sound**: Trimmed silent audio segments from the default wake-up sounds to improve responsiveness.
+
 ## [2.0.5] — 2026-02-07
 
 ### Added
