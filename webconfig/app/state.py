@@ -1,6 +1,7 @@
 import configparser
 import json
 import os
+import re
 import shutil
 import subprocess
 
@@ -25,6 +26,11 @@ WAKE_UP_DIR = PROJECT_ROOT / "sounds" / "wake-up" / "custom"
 WAKE_UP_DIR_DEFAULT = PROJECT_ROOT / "sounds" / "wake-up" / "default"
 
 RELEASE_NOTE = {"tag": None, "body": "", "url": "", "fetched_at": 0}
+
+
+def _show_rc_versions_enabled() -> bool:
+    """Return whether prerelease/RC tags should be considered."""
+    return os.getenv("SHOW_RC_VERSIONS", "false").strip().lower() == "true"
 
 
 def load_versions():
@@ -63,6 +69,7 @@ def save_versions(current: str, latest: str):
 
 
 def get_current_version():
+    tag_list: list[str] = []
     try:
         # First, check if HEAD points to a tag directly (most reliable for detached HEAD)
         tags = subprocess.check_output(
@@ -122,9 +129,15 @@ def get_current_version():
             text=True,
         ).strip()
         if result:
-            # If it's an exact match, result is just the tag name
-            # If it has distance, it's like "v2.0.1-5-gabc123"
-            # For now, return as-is (the frontend can handle it)
+            # If exact match: "v2.0.1"
+            # If ahead of a tag: "v2.0.1-5-gabc123"
+            m = re.match(r"^(?P<tag>.+)-\d+-g[0-9a-fA-F]+$", result)
+            if m:
+                tag_only = m.group("tag")
+                logger.verbose(
+                    f"[get_current_version] Found via --tags (normalized to nearest tag): {tag_only}"
+                )
+                return tag_only
             logger.verbose(f"[get_current_version] Found via --tags: {result}")
             return result
     except subprocess.CalledProcessError:
@@ -165,8 +178,24 @@ def fetch_latest_tag():
             logger.warning("[fetch_latest_tag] Unexpected response format")
             return None
         filtered = [tag["name"] for tag in data if "name" in tag]
-        if filtered:
-            return max(filtered, key=lambda v: parse_version(v.lstrip("v")))
+        include_prerelease = _show_rc_versions_enabled()
+        valid_tags: list[str] = []
+        for tag_name in filtered:
+            try:
+                parsed = parse_version(tag_name.lstrip("v"))
+                if parsed.is_prerelease and not include_prerelease:
+                    logger.verbose(
+                        f"[fetch_latest_tag] Skipping prerelease tag (SHOW_RC_VERSIONS=false): {tag_name}"
+                    )
+                    continue
+                valid_tags.append(tag_name)
+            except InvalidVersion:
+                logger.verbose(
+                    f"[fetch_latest_tag] Skipping non-semver tag: {tag_name}"
+                )
+
+        if valid_tags:
+            return max(valid_tags, key=lambda v: parse_version(v.lstrip("v")))
         logger.warning("[fetch_latest_tag] No tags found")
         return None
     except Exception as e:
@@ -200,6 +229,13 @@ def fetch_release_note_for_tag(tag: str):
 def bootstrap_versions_and_release_note():
     latest = fetch_latest_tag()
     current = get_current_version()
+    if not latest:
+        try:
+            latest = load_versions()["version"].get("latest")
+        except Exception:
+            latest = None
+    if not latest:
+        latest = current
     save_versions(current, latest)
     try:
         versions_cfg = load_versions()

@@ -4,16 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [2.0.7] — 2026-03-05
+## [2.0.7] — 2026-03-06
 
 ### Changed
 
 - **Restart Controls (Web UI)**: Removed the separate **Restart UI** button to avoid confusion. The remaining **Restart** button now performs the same full restart behavior as the old Restart UI action, restarting both `billy.service` and `billy-webconfig.service`.
-
-## [2.0.6] — 2026-03-05
-
-### Changed
-
 - **WebSocket Integration**: Replaced HTTP polling with WebSocket for real-time status and log updates in the Web UI, significantly reducing network overhead and improving responsiveness.
 - **Listening State Feedback**: Updated head movement timing so the head moves out when Billy is actually listening, rather than during the wake-up clip.
 
@@ -25,6 +20,14 @@ All notable changes to this project will be documented in this file.
 - **Listening and Shutdown Reliability**: Refined mic/session cleanup and state transitions to reduce hanging stops, duplicate stop handling, and noisy shutdown behavior during follow-up and retry flows.
 - **User Greeting**: Fixed asyncio.sleep calls in user identification flow that prevented Billy from acknowledging new user profiles.
 - **Wake-up sound**: Trimmed silent audio segments from the default wake-up sounds to improve responsiveness.
+
+## [2.0.6] — 2026-03-05
+
+### Fixed
+
+- **Version Detection**: Fixed bug where pre-release/RC tags would still show up even if `SHOW_RC_VERSIONS=false`
+
+---
 
 ## [2.0.5] — 2026-02-07
 
