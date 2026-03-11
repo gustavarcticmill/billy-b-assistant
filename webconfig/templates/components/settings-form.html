@@ -57,17 +57,23 @@
                 </label>
                 <div class="relative">
                     <div data-tooltip>
-                        Choose between the two realtime models that are currently available:<br>
-                        <strong>gpt-4o-mini-realtime-preview</strong> is cheaper and the default.<br>
-                        <strong>gpt-realtime</strong> is higher performance but also more expensive in token usage (~ ×6.66 compared to mini).
+                        Available realtime models include:<br>
+                        <strong>gpt-realtime-1.5</strong> latest realtime model.<br>
+                        <strong>gpt-realtime</strong> stable high-quality realtime model.<br>
+                        <strong>gpt-realtime-mini</strong> lower-cost realtime model.<br>
+                        <strong>gpt-4o-mini-realtime-preview</strong> cheapest and the default.<br>
                         <br><br>
-                        <strong>gpt-realtime-mini</strong> same cost as the mini preview.<br>
-                        <strong>gpt-4o-realtime-preview</strong> is deprecated (and most expensive).<br><br>
+                        Legacy preview models are kept for compatibility.<br><br>
                         See <a href="https://openai.com/api/pricing/" target="_blank" class="underline hover:text-cyan-400">OpenAI Realtime API Pricing</a> for details .
                     </div>
 
                     <select id="OPENAI_MODEL" name="OPENAI_MODEL"
                             class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                        <option value="gpt-realtime-1.5"
+                                {% if config.get(
+                        'OPENAI_MODEL') == 'gpt-realtime-1.5' %}selected{% endif %}>
+                        gpt-realtime-1.5
+                        </option>
                         <option value="gpt-4o-mini-realtime-preview"
                                 {% if config.get(
                         'OPENAI_MODEL') == 'gpt-4o-mini-realtime-preview' %}selected{% endif %}>
@@ -590,6 +596,23 @@
                     <!-- Hidden checkbox for form submission -->
                     <input type="checkbox" id="SHOW_RC_VERSIONS" name="SHOW_RC_VERSIONS" class="hidden" value="True">
                 </div>
+                <div id="env-editor-card" class="flex flex-row justify-between gap-3 p-3 rounded-lg border border-zinc-700 bg-amber-500/20 hover:bg-amber-500/30 hover:border-amber-400 transition-colors cursor-pointer">
+                    <div>
+                        <div class="text-white font-medium text-sm">.env Editor</div>
+                        <div class="text-xs text-zinc-400 mb-1">
+                            Edit low-level environment values (advanced)
+                        </div>
+                    </div>
+                    <div id="env-editor-btn-wrapper" class="flex items-center justify-end hidden">
+                        <button id="open-env-editor-modal-btn"
+                                type="button"
+                                class="bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold py-2 px-4 rounded flex gap-2 items-center cursor-pointer"
+                                title="Open .env file editor">
+                            <span class="material-icons">admin_panel_settings</span>
+                            Edit .env
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Reset to Defaults -->
                 <div id="reset-defaults-card" class="flex flex-row justify-between gap-3 p-3 rounded-lg border border-zinc-700 bg-rose-500/10 hover:border-rose-500 transition-colors cursor-pointer">
@@ -662,6 +685,15 @@
                     <input type="checkbox" id="factory-reset-reboot" class="h-4 w-4">
                     Reboot when done
                 </label>
+                <div class="pt-2">
+                    <button id="simulate-update-btn"
+                            type="button"
+                            class="bg-cyan-500 hover:bg-cyan-400 text-zinc-900 text-sm py-2 px-4 rounded flex gap-2 items-center cursor-pointer"
+                            title="Reinstall dependencies for the current checked-out version">
+                        <span class="material-icons align-middle">system_update_alt</span>
+                        Reinstall current version
+                    </button>
+                </div>
             </div>
 
         </div>

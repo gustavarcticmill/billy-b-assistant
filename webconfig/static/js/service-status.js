@@ -5,6 +5,7 @@ const ServiceStatus = (() => {
     const CACHE_DURATION = 2000; // 2 seconds cache
     const RESTART_GRACE_MS = 12000;
     let restartInProgressUntil = 0;
+    let restartButtonRef = null;
 
     const isRestartInProgress = () => Date.now() < restartInProgressUntil;
 
@@ -24,6 +25,16 @@ const ServiceStatus = (() => {
                 }
             }, delayMs);
         });
+    };
+
+    const setRestartButtonLoading = (loading) => {
+        if (!restartButtonRef) return;
+        const icon = restartButtonRef.querySelector(".material-icons");
+        if (!icon) return;
+        icon.classList.toggle("animate-spin", !!loading);
+        restartButtonRef.disabled = !!loading;
+        restartButtonRef.classList.toggle("opacity-50", !!loading);
+        restartButtonRef.classList.toggle("cursor-not-allowed", !!loading);
     };
 
     const fetchStatus = async (forceRefresh = false) => {
@@ -110,29 +121,41 @@ const ServiceStatus = (() => {
             labelSpan.textContent = label;
             btn.appendChild(labelSpan);
 
-            btn.onclick = () => handleServiceAction(action);
+            btn.onclick = () => handleServiceAction(action, btn);
             return btn;
         };
 
         if (status === "inactive" || status === "failed") {
             controlsEl.appendChild(createButton("Start", "start", "emerald", "play_arrow"));
+            restartButtonRef = null;
         } else if (status === "active") {
-            controlsEl.appendChild(createButton("Restart", "restart", "amber", "restart_alt"));
+            const restartBtn = createButton("Restart", "restart", "amber", "restart_alt");
+            controlsEl.appendChild(restartBtn);
+            restartButtonRef = restartBtn;
             controlsEl.appendChild(createButton("Stop", "stop", "rose", "stop"));
         } else {
             controlsEl.textContent = "Unknown status.";
+            restartButtonRef = null;
         }
     };
 
     // Expose for WebSocket
     window.updateServiceStatus = updateServiceStatusUI;
 
-    const handleServiceAction = async (action) => {
+    const handleServiceAction = async (action, buttonEl = null) => {
         const statusEl = document.getElementById("service-status");
         const logoEl = document.getElementById("status-logo");
 
         if (action === "restart") {
             markRestartInProgress();
+            sessionStorage.setItem("billy:reload_on_ws_reconnect", "1");
+            if (buttonEl) {
+                restartButtonRef = buttonEl;
+            }
+            setRestartButtonLoading(true);
+            if (window.LoadingOverlay && window.LoadingOverlay.show) {
+                window.LoadingOverlay.show("Restarting Billy... waiting for reconnect.");
+            }
         }
 
         const statusMap = {
@@ -185,5 +208,10 @@ const ServiceStatus = (() => {
 
     // Explicitly expose so other files can reliably check restart state.
     window.ServiceStatus = api;
+
+    window.addEventListener("billy:websocket:connected", () => {
+        setRestartButtonLoading(false);
+    });
+
     return api;
 })();

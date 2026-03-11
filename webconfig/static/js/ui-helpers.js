@@ -41,11 +41,39 @@ function toggleDropdown(btn) {
 }
 
 function toggleTooltip(el) {
-    el.classList.toggle("text-cyan-400")
-    const label = el.closest("label")
-    const tooltip = label.parentElement.querySelector("[data-tooltip]")
-    const visible = tooltip.getAttribute("data-visible") === "true"
-    tooltip.setAttribute("data-visible", visible ? "false" : "true")
+    if (!el) return;
+    el.classList.toggle("text-cyan-400");
+
+    const explicitTargetId = el.getAttribute("data-tooltip-target");
+    if (explicitTargetId) {
+        const explicitTooltip = document.getElementById(explicitTargetId);
+        if (explicitTooltip) {
+            const visible = explicitTooltip.getAttribute("data-visible") === "true";
+            explicitTooltip.setAttribute("data-visible", visible ? "false" : "true");
+            return;
+        }
+    }
+
+    const label = el.closest("label");
+    let tooltip = null;
+    if (label && label.parentElement) {
+        tooltip = label.parentElement.querySelector("[data-tooltip]");
+    }
+    if (!tooltip) {
+        const container =
+            el.closest(".relative") ||
+            el.parentElement ||
+            el.closest("div");
+        if (container) {
+            tooltip =
+                container.querySelector("[data-tooltip]") ||
+                container.parentElement?.querySelector("[data-tooltip]");
+        }
+    }
+    if (!tooltip) return;
+
+    const visible = tooltip.getAttribute("data-visible") === "true";
+    tooltip.setAttribute("data-visible", visible ? "false" : "true");
 }
 
 document.addEventListener('click', (e) => {
@@ -61,8 +89,16 @@ document.addEventListener('click', (e) => {
     // Close tooltips when clicking outside
     document.querySelectorAll('[data-tooltip]').forEach(tooltip => {
         if (tooltip.getAttribute('data-visible') === 'true' && !tooltip.contains(e.target)) {
-            const container = tooltip.parentElement;
-            const helpIcon = container.querySelector('.material-icons');
+            let helpIcon = null;
+            if (tooltip.id) {
+                helpIcon = document.querySelector(
+                    `[data-tooltip-target="${tooltip.id}"]`
+                );
+            }
+            if (!helpIcon) {
+                const container = tooltip.parentElement;
+                helpIcon = container?.querySelector('.material-icons');
+            }
             if (helpIcon && !helpIcon.contains(e.target)) {
                 tooltip.setAttribute('data-visible', 'false');
                 helpIcon.classList.remove('text-cyan-400');
@@ -71,4 +107,44 @@ document.addEventListener('click', (e) => {
     });
 });
 
+// ===================== LOADING OVERLAY =====================
+const LoadingOverlay = (() => {
+    const overlayId = "loading-overlay";
+    const textId = "loading-overlay-text";
+    const reloadFlagKey = "billy:reload_on_ws_reconnect";
 
+    const show = (message = "Restarting Billy... reconnecting interface.") => {
+        const overlay = document.getElementById(overlayId);
+        const text = document.getElementById(textId);
+        if (!overlay) return;
+        if (text) text.textContent = message;
+        overlay.classList.remove("hidden");
+    };
+
+    const hide = () => {
+        const overlay = document.getElementById(overlayId);
+        if (!overlay) return;
+        overlay.classList.add("hidden");
+    };
+
+    const isVisible = () => {
+        const overlay = document.getElementById(overlayId);
+        return !!overlay && !overlay.classList.contains("hidden");
+    };
+
+    window.addEventListener("billy:websocket:connected", () => {
+        if (isVisible()) {
+            hide();
+        }
+        if (sessionStorage.getItem(reloadFlagKey) === "1") {
+            sessionStorage.removeItem(reloadFlagKey);
+            setTimeout(() => {
+                window.location.reload();
+            }, 200);
+        }
+    });
+
+    return { show, hide, isVisible };
+})();
+
+window.LoadingOverlay = LoadingOverlay;

@@ -10,9 +10,17 @@ def _classify_kind(text: str) -> tuple[Literal["prompt", "literal", "raw"], str]
 
 async def say(text: str, *, interactive: Optional[bool] = None):
     # 🔁 Lazy import to avoid: session -> mqtt -> say -> session
+    from . import audio
+    from .config import CHUNK_MS, TEXT_ONLY_MODE
     from .session_manager import BillySession
 
     kind, cleaned = _classify_kind(text)
+
+    # MQTT "say" sessions don't play the wake-up clip, so ensure the
+    # playback gate is open; otherwise run_stream can block indefinitely.
+    if not TEXT_ONLY_MODE:
+        audio.ensure_playback_worker_started(CHUNK_MS)
+        audio.playback_done_event.set()
 
     session = BillySession(
         kickoff_text=cleaned,

@@ -30,6 +30,8 @@ class SessionState:
         self._triggered_new_response = False
         self.follow_up_retry_count = 0
         self._skip_post_response_once = False
+        self._last_heuristic_signature: tuple[str, bool] | None = None
+        self._last_user_turn_meaningful = False
 
         # Follow-up detection
         self.follow_up_expected = False
@@ -60,6 +62,8 @@ class SessionState:
         self._triggered_new_response = False
         self.follow_up_retry_count = 0
         self._skip_post_response_once = False
+        self._last_heuristic_signature = None
+        self._last_user_turn_meaningful = False
         self.follow_up_expected = False
         self.follow_up_prompt = None
         self._ignore_next_short_audio_response = False
@@ -83,6 +87,7 @@ class SessionState:
         self.follow_up_prompt = None
         self._active_transcript_stream = None
         self._added_done_text = False
+        self._last_heuristic_signature = None
         # Don't reset _saw_follow_up_call here - it will be reset after decision is made
         self._triggered_new_response = False
 
@@ -102,8 +107,6 @@ class SessionState:
         self._current_input_had_server_speech = False
         # A committed user turn should count as recent activity while model processing starts.
         self.update_activity()
-        if self._last_committed_audio_chunks >= 6:
-            self.follow_up_retry_count = 0
         if DEBUG_MODE:
             logger.info(
                 f"Committed audio turn with {self._last_committed_audio_chunks} chunks "
@@ -121,6 +124,17 @@ class SessionState:
         content = item.get("content") or []
         if not content:
             return
+
+        has_meaningful_user_content = False
+        for part in content:
+            text_bits = [
+                (part.get("text") or "").strip(),
+                (part.get("input_text") or "").strip(),
+                (part.get("transcript") or "").strip(),
+            ]
+            if any(text_bits):
+                has_meaningful_user_content = True
+                break
 
         # Ignore audio-only turns with no transcript (silence/noise),
         # and very short audio blips.
@@ -144,6 +158,15 @@ class SessionState:
             should_ignore = total_chunks < min_chunks_for_real_turn or (
                 low_signal_noise and not self._last_committed_had_server_speech
             )
+            # If we didn't get transcript text, but VAD marked speech and the turn
+            # wasn't classified as noise, still treat this as meaningful user input.
+            if (
+                not has_meaningful_user_content
+                and not should_ignore
+                and self._last_committed_had_server_speech
+                and loud_chunks > 0
+            ):
+                has_meaningful_user_content = True
             if should_ignore:
                 self._ignore_next_short_audio_response = True
                 logger.info(
@@ -156,6 +179,11 @@ class SessionState:
                     f"low_signal_noise={low_signal_noise}).",
                     "🔇",
                 )
+
+        # Reset follow-up retry only when we actually received meaningful user content.
+        if has_meaningful_user_content:
+            self.follow_up_retry_count = 0
+        self._last_user_turn_meaningful = has_meaningful_user_content
 
     def on_transcript_delta(self, stream_type: str, delta: str):
         """Handle transcript delta events."""
@@ -216,9 +244,13 @@ class SessionState:
         txt = (self.full_response_text or "").strip()
         has_question = any(ch in txt for ch in ("?", "¿", "？", "؟", "‽"))
         if DEBUG_MODE:
-            logger.info(
-                f"Heuristic check: text='{txt}' | has_question={has_question}", "🔍"
-            )
+            signature = (txt, has_question)
+            if signature != self._last_heuristic_signature:
+                logger.info(
+                    f"Heuristic check: text='{txt}' | has_question={has_question}",
+                    "🔍",
+                )
+                self._last_heuristic_signature = signature
         # If Billy asks a question, keep mic open for user to respond
         return has_question
 
@@ -287,3 +319,8 @@ class SessionState:
     def increment_follow_up_retry(self):
         """Increment follow-up retry counter."""
         self.follow_up_retry_count += 1
+
+    def mark_user_turn_meaningful(self):
+        """Mark the last user turn as meaningful and reset retry budget."""
+        self._last_user_turn_meaningful = True
+        self.follow_up_retry_count = 0

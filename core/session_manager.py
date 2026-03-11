@@ -254,6 +254,8 @@ class BillySession:
         transcript = (data.get("transcript") or "").strip()
         item_id = data.get("item_id")
         if transcript:
+            # Meaningful user reply received: clear follow-up retry counter.
+            self.state.mark_user_turn_meaningful()
             if not item_id or item_id not in self._logged_user_transcript_item_ids:
                 logger.info(f"User said: {transcript!r}", "🗣️")
             if item_id:
@@ -294,15 +296,56 @@ class BillySession:
 
     async def _on_response_done(self, data: dict[str, Any]):
         if self.state._skip_post_response_once:
-            self.state._skip_post_response_once = False
-            self.state.allow_mic_input = True
-            self.state.assistant_speaking = False
-            self.last_activity[0] = time.time()
-            logger.info(
-                "Skipping post-response handling for cancelled short/noise turn; staying in listening mode.",
-                "🔇",
+            response = data.get("response") or {}
+            status_details = response.get("status_details") or {}
+            cancelled_by_client = (
+                status_details.get("type") == "cancelled"
+                and status_details.get("reason") == "client_cancelled"
             )
-            return
+            output_items = response.get("output") or []
+            has_meaningful_output = bool(
+                self.state._turn_had_speech
+                or self.state._saw_follow_up_call
+                or any(
+                    (item.get("type") == "message" and (item.get("content") or []))
+                    or item.get("type") == "function_call"
+                    for item in output_items
+                )
+            )
+
+            # Manual turn-handoff interrupts intentionally cancel the current response.
+            # Even if partial transcript/audio exists, post-response follow-up logic
+            # should be skipped because the mic was already reopened explicitly.
+            if cancelled_by_client:
+                self.state._skip_post_response_once = False
+                self.state.allow_mic_input = True
+                self.state.assistant_speaking = False
+                self.last_activity[0] = time.time()
+                logger.info(
+                    "Skipping post-response handling for client-cancelled interrupt; mic handoff already active.",
+                    "🔇",
+                )
+                return
+
+            # We only skip post-response handling when the cancelled turn truly produced
+            # no assistant output. If output exists, process it normally to avoid getting
+            # stuck in a half-open "listening/retry" state.
+            if not has_meaningful_output:
+                self.state._skip_post_response_once = False
+                self.state.allow_mic_input = True
+                self.state.assistant_speaking = False
+                self.last_activity[0] = time.time()
+                logger.info(
+                    "Skipping post-response handling for cancelled short/noise turn; staying in listening mode.",
+                    "🔇",
+                )
+                return
+
+            logger.info(
+                "Skip flag was set, but assistant output was present; continuing normal post-response handling.",
+                "🔄",
+            )
+            self.state._skip_post_response_once = False
 
         error = data.get("status_details", {}).get("error")
         if error:
@@ -372,6 +415,7 @@ class BillySession:
 
     async def _post_response_handling(self):
         """Handle post-response logic: reopen mic or end session."""
+        last_user_turn_meaningful = self.state._last_user_turn_meaningful
         if self.state.full_response_text.strip():
             print(
                 f"📝 Transcript completed: \"{self.state.full_response_text.strip()}\""
@@ -402,6 +446,7 @@ class BillySession:
             )
             self.state._saw_follow_up_call = False
             self.state.full_response_text = ""
+            self.state._last_user_turn_meaningful = False
             self.last_activity[0] = time.time()
             await self.mic_manager.start_after_playback()
             return
@@ -445,26 +490,36 @@ class BillySession:
             )
 
         if wants_follow_up:
-            if self.state.follow_up_retry_count >= FOLLOW_UP_RETRY_LIMIT:
-                logger.info(
-                    f"Follow-up retry limit reached ({FOLLOW_UP_RETRY_LIMIT}). Ending session.",
-                    "🛑",
-                )
-                self.state._saw_follow_up_call = False
-                self.state.follow_up_retry_count = 0
-                self._set_idle_state()
-                stop_all_motors()
-                await self._close_ws()
-                return
+            # Retry budget is only for no-content/silence turns.
+            if not last_user_turn_meaningful:
+                if self.state.follow_up_retry_count >= FOLLOW_UP_RETRY_LIMIT:
+                    logger.info(
+                        f"Follow-up retry limit reached ({FOLLOW_UP_RETRY_LIMIT}). Ending session.",
+                        "🛑",
+                    )
+                    self.state._saw_follow_up_call = False
+                    self.state.follow_up_retry_count = 0
+                    self.state._last_user_turn_meaningful = False
+                    self._set_idle_state()
+                    stop_all_motors()
+                    await self._close_ws()
+                    return
 
-            self.state.increment_follow_up_retry()
-            logger.info(
-                f"Follow-up expected. Keeping session open "
-                f"(retry {self.state.follow_up_retry_count}/{FOLLOW_UP_RETRY_LIMIT}).",
-                "🔁",
-            )
+                self.state.increment_follow_up_retry()
+                logger.info(
+                    f"Follow-up expected after empty/noisy turn. Keeping session open "
+                    f"(retry {self.state.follow_up_retry_count}/{FOLLOW_UP_RETRY_LIMIT}).",
+                    "🔁",
+                )
+            else:
+                self.state.follow_up_retry_count = 0
+                logger.info(
+                    "Follow-up expected after meaningful user input. Keeping session open.",
+                    "🔁",
+                )
             # Reset the flag after using it
             self.state._saw_follow_up_call = False
+            self.state._last_user_turn_meaningful = False
             await self.mic_manager.start_after_playback()
             self.state.full_response_text = ""
             self.last_activity[0] = time.time()
@@ -474,6 +529,7 @@ class BillySession:
         # Reset the flag after using it
         self.state._saw_follow_up_call = False
         self.state.follow_up_retry_count = 0
+        self.state._last_user_turn_meaningful = False
         self._set_idle_state()
         stop_all_motors()
         await self._close_ws()

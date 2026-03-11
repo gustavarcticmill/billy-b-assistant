@@ -8,6 +8,7 @@ from typing import Any
 from ..config import PERSONALITY
 from ..ha import send_conversation_prompt
 from ..logger import logger
+from ..news_digest import get_news_digest
 from ..persona import update_persona_ini
 from ..persona_manager import persona_manager
 
@@ -31,6 +32,7 @@ class FunctionHandler:
             "store_memory": self._handle_store_memory,
             "manage_profile": self._handle_manage_profile,
             "switch_persona": self._handle_switch_persona,
+            "get_news_digest": self._handle_get_news_digest,
         }
 
         handler = handlers.get(function_name)
@@ -39,7 +41,19 @@ class FunctionHandler:
             return
 
         try:
+            if logger.get_level().name == "VERBOSE":
+                logger.verbose(
+                    f"tool_call:start name={function_name} call_id={call_id} raw_args={raw_args!r}",
+                    "🧰",
+                )
+            started_at = time.perf_counter()
             await handler(raw_args, call_id)
+            if logger.get_level().name == "VERBOSE":
+                elapsed_ms = (time.perf_counter() - started_at) * 1000.0
+                logger.verbose(
+                    f"tool_call:done name={function_name} call_id={call_id} elapsed_ms={elapsed_ms:.1f}",
+                    "🧰",
+                )
         except Exception as e:
             logger.error(f"Function {function_name} failed: {e}")
 
@@ -301,6 +315,59 @@ class FunctionHandler:
         """Handle persona switching mid-session."""
         args = self._parse_json_args(raw_args, "switch_persona")
         await self.session.persona_handler.handle_switch_persona(args)
+
+    async def _handle_get_news_digest(
+        self, raw_args: str | None, call_id: str | None = None
+    ):
+        """Handle location-aware news/weather/sports digest retrieval."""
+        args = self._parse_json_args(raw_args, "get_news_digest")
+        if logger.get_level().name == "VERBOSE":
+            logger.verbose(f"get_news_digest:args {args}", "🗞️")
+        result = await asyncio.to_thread(get_news_digest, args)
+        if logger.get_level().name == "VERBOSE":
+            logger.verbose(
+                "get_news_digest:result "
+                f"ok={result.get('ok')} "
+                f"category={result.get('category')} "
+                f"source={result.get('source')} "
+                f"items={len(result.get('items') or [])} "
+                f"summary={result.get('summary')!r}",
+                "🗞️",
+            )
+
+        if call_id:
+            await self.session._ws_send_json({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": json.dumps(result),
+                },
+            })
+            await asyncio.sleep(0.1)
+
+        category = str(result.get("category", "news")).strip()
+        if result.get("ok"):
+            prompt = (
+                f"Create a short spoken {category} briefing based on this tool result: "
+                f"{json.dumps(result)}. Mention location/source when relevant and keep it under 4 sentences."
+            )
+        else:
+            prompt = (
+                f"The news tool failed with this result: {json.dumps(result)}. "
+                "Apologize briefly and ask a concise follow-up question to refine location/topic."
+            )
+
+        await self.session._ws_send_json({
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "user",
+                "content": [{"type": "input_text", "text": prompt}],
+            },
+        })
+        self.session.state._triggered_new_response = True
+        await self.session._ws_send_json({"type": "response.create"})
 
     # Helper method (kept for backward compatibility with update_personality handler)
     async def _update_session_with_user_context(self):

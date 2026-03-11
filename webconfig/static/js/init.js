@@ -52,6 +52,8 @@ document.addEventListener("DOMContentLoaded", async () => {
     SettingsForm.populateDropdowns(cfg);
     SettingsForm.initMouthArticulationSlider();
     SettingsForm.bindFactoryReset();
+    SettingsForm.bindEnvEditorCard();
+    SettingsForm.bindNewsSources();
     PersonaForm.handlePersonaSave();
     PersonaForm.bindPersonaSelector();
     PersonaForm.populatePersonaSelector();
@@ -81,4 +83,3 @@ document.addEventListener("DOMContentLoaded", async () => {
         window.PersonaForm.initCreatePersonaModal();
     }
 });
-

@@ -4,13 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [2.0.7] — 2026-03-06
+## [2.1.0] — 2026-03-06
+
+### Added
+- **OpenAI Realtime Model Support**: Added support for selecting `gpt-realtime-1.5` in the Web UI and `.env` configuration.
+- **News Digest Tool**: Added a new `get_news_digest` function-call tool so Billy can fetch live headlines, weather forecasts, and sports scoreboards with optional topic, team, and regional filters.
+- **News Sources Manager (Web UI)**: Added a UI list to add/remove/toggle RSS headline sources and persist them for Billy's news briefings.
+- **MQTT commands**: Added discovery/config entities for `Billy Restart`, `Billy Reboot`, and `Billy Listen` on `billy/command`. Added support for the `listen` command over MQTT to start/stop Billy listening remotely. (contribution by: @Marko181)
+
 
 ### Changed
 
 - **Restart Controls (Web UI)**: Removed the separate **Restart UI** button to avoid confusion. The remaining **Restart** button now performs the same full restart behavior as the old Restart UI action, restarting both `billy.service` and `billy-webconfig.service`.
 - **WebSocket Integration**: Replaced HTTP polling with WebSocket for real-time status and log updates in the Web UI, significantly reducing network overhead and improving responsiveness.
 - **Listening State Feedback**: Updated head movement timing so the head moves out when Billy is actually listening, rather than during the wake-up clip.
+- **MQTT Startup Behavior**: MQTT broker connection now retries in the background until successful instead of failing once at startup. (contribution by: @Marko181)
 
 ### Fixed
 

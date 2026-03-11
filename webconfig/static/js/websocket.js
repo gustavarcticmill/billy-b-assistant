@@ -10,6 +10,7 @@ function connectWebSocket() {
     
     ws.onopen = () => {
         console.log('WebSocket connected');
+        window.dispatchEvent(new CustomEvent('billy:websocket:connected'));
         if (reconnectTimeout) {
             clearTimeout(reconnectTimeout);
             reconnectTimeout = null;
@@ -49,6 +50,7 @@ function connectWebSocket() {
     
     ws.onclose = () => {
         console.log('WebSocket disconnected, reconnecting in 3s...');
+        window.dispatchEvent(new CustomEvent('billy:websocket:disconnected'));
         ws = null;
         reconnectTimeout = setTimeout(connectWebSocket, 3000);
     };

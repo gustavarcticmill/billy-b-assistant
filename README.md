@@ -18,6 +18,8 @@ The **Billy Bass Assistant** is a Raspberry Pi–powered voice assistant embedde
 - Support for the Modern Billy hardware version with 2 motors as well as the Classic Billy hardware version (3 motors)
 - Custom song playback with coordinated mouth and tail animations
 - Home Assistant command passthrough using the Conversation API
+- News digest tool for headlines, weather, and sports updates 
+  - Dedicated News settings section with topic-tagged RSS sources managed in the Web UI
 - Lightweight web UI:
   - User profile management with memory system
   - Multiple personas with configurable voices and traits
@@ -427,6 +429,7 @@ ALLOW_UPDATE_PERSONALITY_INI=true
 **OPENAI_API_KEY**: (Required) get it from <https://platform.openai.com/api-keys>  
 **VOICE**: The OpenAI voice model to use (`alloy`, `ash`, `ballad`, `coral`, `echo`, `sage`, `shimmer`, `verse`, `marin`, or `cedar`, `ballad` is default)  
 **MQTT_\***: (Optional) used if you want to integrate Billy with Home Assistant or another MQTT broker  
+**NEWS_DEFAULT_LOCATION / NEWS_DEFAULT_COUNTRY / NEWS_DEFAULT_LANGUAGE**: (Optional) defaults for weather and regional headlines  
 **MIC_TIMEOUT_SECONDS**: How long Billy should wait after your last mic activity before ending input  
 **SILENCE_THRESHOLD**: Audio threshold (RMS) for what counts as mic input;lower this value if Billy interrupts you too quickly, set higher if Billy doesn't respond (because he thinks you're still talking)  
 **DEBUG_MODE**: Print debug information such as OpenAI responses to the output stream  

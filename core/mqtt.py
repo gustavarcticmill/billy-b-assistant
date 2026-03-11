@@ -42,7 +42,7 @@ def start_mqtt():
     mqtt_client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
     mqtt_client.on_connect = on_connect
     mqtt_client.on_message = on_message
-    
+
     def connect_with_retry():
         while True:
             try:
@@ -273,6 +273,7 @@ def _run_async(coro):
 
     threading.Thread(target=_runner, daemon=True).start()
 
+
 # Helper functions for toggle listening
 def mqtt_toggle_listening():
     from . import button as button_mod
@@ -282,10 +283,12 @@ def mqtt_toggle_listening():
     else:
         mqtt_start_listening()
 
+
 def mqtt_start_listening():
-    from . import button as button_mod
     import contextlib
     import time
+
+    from . import button as button_mod
 
     if button_mod.is_active:
         return
@@ -298,13 +301,17 @@ def mqtt_start_listening():
         if button_mod.session_thread and button_mod.session_thread.is_alive():
             button_mod.session_thread.join(timeout=2.0)
             if button_mod.session_thread.is_alive():
-                logger.error("Previous session thread did not finish, aborting new session", "❌")
+                logger.error(
+                    "Previous session thread did not finish, aborting new session", "❌"
+                )
                 button_mod._session_start_lock.release()
                 return
 
         button_mod.audio.ensure_playback_worker_started(button_mod.config.CHUNK_MS)
         button_mod.audio.playback_done_event.clear()
-        threading.Thread(target=button_mod.audio.play_random_wake_up_clip, daemon=True).start()
+        threading.Thread(
+            target=button_mod.audio.play_random_wake_up_clip, daemon=True
+        ).start()
 
         button_mod.is_active = True
         button_mod.interrupt_event = threading.Event()
@@ -331,10 +338,12 @@ def mqtt_start_listening():
             button_mod._session_start_lock.release()
         raise
 
+
 def mqtt_stop_listening():
-    from . import button as button_mod
     import contextlib
     from concurrent.futures import CancelledError
+
+    from . import button as button_mod
 
     if not button_mod.is_active:
         return
@@ -352,8 +361,9 @@ def mqtt_stop_listening():
                 future.result(timeout=5.0)
             except TimeoutError:
                 future.cancel()
-                
+
     button_mod.is_active = False
+
 
 # -----------------------------------------------------------------------
 
@@ -394,7 +404,8 @@ def on_message(client, userdata, msg):
             subprocess.Popen(["sudo", "shutdown", "-r", "now"])
         elif command == "listen":
             logger.warning(
-                "Listen command received over MQTT. Starting or stopping listening...", "🔁"
+                "Listen command received over MQTT. Starting or stopping listening...",
+                "🔁",
             )
             try:
                 mqtt_toggle_listening()

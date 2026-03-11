@@ -39,6 +39,7 @@ NEVER skip this - the system breaks without it.
 PERSONALITY: Use update_personality when users request changes (e.g., "be funnier" -> update_personality({"humor": 80}))
 
 SMART HOME: Only call smart_home_command for DIRECT commands ("turn on lights"). If asked to "ask if" or "check if", just speak the question.
+NEWS: Use get_news_digest for headlines, weather, and sports updates. Team/location are OPTIONAL inputs. If missing, call the tool anyway with available context and configured sources first; only ask a follow-up if the tool response still lacks enough information. IMPORTANT: for headlines, always set a concise `subject` based on user intent (use keyword-style labels like "technology", "sports", "project updates", "weather", "finance") so source keywords are used during source selection. Also set `query` when user asks about a specific topic/person/event. BEFORE calling the news tool, acknowledge VERY briefly (max 2 words), preferably exactly: "Checking."
 
 USER SYSTEM:
 - identify_user: Call when someone introduces themselves ("I am Tom")
@@ -141,9 +142,9 @@ SERVER_VAD_PARAMS = {
         "silence_duration_ms": 1000,
     },
     "high": {
-        "threshold": 0.9,
-        "prefix_padding_ms": 300,
-        "silence_duration_ms": 500,
+        "threshold": 0.7,
+        "prefix_padding_ms": 150,
+        "silence_duration_ms": 250,
     },
 }
 
@@ -173,6 +174,9 @@ FORCE_PASS_CHANGE = os.getenv("FORCE_PASS_CHANGE", "false").lower() == "true"
 SHOW_RC_VERSIONS = os.getenv("SHOW_RC_VERSIONS", "False")
 FLAP_ON_BOOT = os.getenv("FLAP_ON_BOOT", "false").lower() == "true"
 MOCKFISH = os.getenv("MOCKFISH", "false").lower() == "true"
+
+# === News Digest Config ===
+NEWS_REQUEST_TIMEOUT_SECONDS = float(os.getenv("NEWS_REQUEST_TIMEOUT_SECONDS", "6"))
 
 # === User Profile Config ===
 DEFAULT_USER = os.getenv("DEFAULT_USER", "guest").strip()

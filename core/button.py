@@ -74,6 +74,17 @@ _session_start_lock = threading.Lock()  # Lock to prevent concurrent session sta
 button = Button(config.BUTTON_PIN, pull_up=True)
 
 
+def _force_release_session_start_lock(reason: str):
+    """Best-effort lock release to recover from stuck session threads."""
+    if _session_start_lock.locked():
+        try:
+            _session_start_lock.release()
+            logger.warning(f"Force-released session start lock ({reason})", "🧹")
+        except RuntimeError:
+            # Lock may have been released concurrently.
+            pass
+
+
 def _ensure_button_hold_thread():
     """Work around rare gpiozero race where _hold_thread becomes None."""
     if config.MOCKFISH or not gpiozero_available:
@@ -160,13 +171,53 @@ def on_button():
                     session_thread.join(timeout=2.0)
                     if session_thread.is_alive():
                         logger.warning("Session thread did not finish in time", "⚠️")
+                        # Do not keep the start lock blocked forever by a stuck thread.
+                        _force_release_session_start_lock("session thread timeout")
         is_active = False  # ✅ Ensure this is always set after stopping
         return
 
     # Use lock to prevent concurrent session starts (but allow interruption above)
     if not _session_start_lock.acquire(blocking=False):
-        logger.warning("Session start already in progress, ignoring button press", "⚠️")
-        return
+        # Recovery path: if no active session is running, try to clear a stale lock/thread.
+        if not is_active:
+            logger.warning(
+                "Session start lock busy while inactive; attempting recovery", "🧯"
+            )
+            if session_thread and session_thread.is_alive():
+                interrupt_event.set()
+                audio.stop_playback()
+                if session_instance and session_instance.loop:
+                    try:
+                        future = asyncio.run_coroutine_threadsafe(
+                            session_instance.stop_session(), session_instance.loop
+                        )
+                        with contextlib.suppress(Exception):
+                            future.result(timeout=1.5)
+                    except Exception as e:
+                        logger.warning(
+                            f"Stale-session stop during recovery failed: {e}", "⚠️"
+                        )
+                session_thread.join(timeout=1.0)
+            if session_thread and session_thread.is_alive():
+                logger.warning(
+                    "Session thread still alive during recovery; forcing stale cleanup",
+                    "⚠️",
+                )
+            # Always attempt to recover lock here; stale thread may linger but should not
+            # block new button presses indefinitely.
+            session_instance = None
+            session_thread = None
+            _force_release_session_start_lock("inactive stale lock recovery")
+            if _session_start_lock.acquire(blocking=False):
+                logger.info("Recovered stale session lock; continuing start", "✅")
+            else:
+                logger.warning("Could not recover session lock yet, try again", "⚠️")
+                return
+        else:
+            logger.warning(
+                "Session start already in progress, ignoring button press", "⚠️"
+            )
+            return
 
     try:
         # Ensure previous session thread is fully finished before starting new one

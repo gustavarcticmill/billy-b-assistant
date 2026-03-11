@@ -1,5 +1,26 @@
 // ===================== VERSION & UPDATE =====================
 (() => {
+    const updateBtn = document.getElementById("update-btn");
+    const simulateUpdateBtn = document.getElementById("simulate-update-btn");
+    let websocketDisconnectedDuringUpdate = false;
+    let simulateWatchdogTimer = null;
+    let simulateForceReloadTimer = null;
+
+    window.addEventListener("billy:websocket:disconnected", () => {
+        websocketDisconnectedDuringUpdate = true;
+    });
+
+    const setButtonLoading = (button, loading) => {
+        if (!button) return;
+        const icon = button.querySelector(".material-icons");
+        if (icon) {
+            icon.classList.toggle("animate-spin", !!loading);
+        }
+        button.disabled = !!loading;
+        button.classList.toggle("opacity-50", !!loading);
+        button.classList.toggle("cursor-not-allowed", !!loading);
+    };
+
     fetch("/version")
         .then(res => res.json())
         .then(data => {
@@ -10,7 +31,6 @@
             }
             if (data.update_available) {
                 const latestSpan = document.getElementById("latest-version");
-                const updateBtn = document.getElementById("update-btn");
                 if (latestSpan) {
                     latestSpan.textContent = `Update to: ${data.latest}`;
                     latestSpan.classList.remove("hidden");
@@ -23,12 +43,26 @@
         })
         .catch(err => { console.error("Failed to load version info", err); });
 
-    document.getElementById("update-btn").addEventListener("click", () => {
+    if (updateBtn) {
+        updateBtn.addEventListener("click", () => {
         if (!confirm("Are you sure you want to update Billy to the latest version?")) return;
+        setButtonLoading(updateBtn, true);
+        sessionStorage.setItem("billy:reload_on_ws_reconnect", "1");
+        if (window.LoadingOverlay && window.LoadingOverlay.show) {
+            window.LoadingOverlay.show("Updating software... this can take a few minutes.");
+        }
         showNotification("Update started");
         fetch("/update", {method: "POST"})
             .then(res => res.json())
             .then(data => {
+                if (data.status === "up-to-date") {
+                    showNotification("Already up to date.", "info");
+                    setButtonLoading(updateBtn, false);
+                    if (window.LoadingOverlay && window.LoadingOverlay.hide) {
+                        window.LoadingOverlay.hide();
+                    }
+                    return;
+                }
                 if (data.message) { showNotification(data.message); }
                 let attempts = 0, maxAttempts = 24;
                 const checkForUpdate = async () => {
@@ -37,6 +71,7 @@
                         const data = await res.json();
                         if (data.update_available === false) {
                             showNotification("Update complete. Reloading...", "info");
+                            setButtonLoading(updateBtn, false);
                             setTimeout(() => location.reload(), 1500);
                             return;
                         }
@@ -48,6 +83,7 @@
                         setTimeout(checkForUpdate, 5000);
                     } else {
                         showNotification("Update timed out after 2 minutes. Reloading");
+                        setButtonLoading(updateBtn, false);
                         setTimeout(() => location.reload(), 1500);
                     }
                 };
@@ -56,7 +92,131 @@
             .catch(err => {
                 console.error("Failed to update:", err);
                 showNotification("Failed to update", "error");
+                setButtonLoading(updateBtn, false);
+                if (window.LoadingOverlay && window.LoadingOverlay.hide) {
+                    window.LoadingOverlay.hide();
+                }
             });
+        });
+    }
+
+    if (simulateUpdateBtn) {
+        simulateUpdateBtn.addEventListener("click", async () => {
+            setButtonLoading(simulateUpdateBtn, true);
+            sessionStorage.setItem("billy:reload_on_ws_reconnect", "1");
+            if (window.LoadingOverlay && window.LoadingOverlay.show) {
+                window.LoadingOverlay.show("Reinstalling current version...");
+            }
+            showNotification("Reinstall current version started", "info");
+            let waitForReconnect = false;
+            websocketDisconnectedDuringUpdate = false;
+            if (simulateWatchdogTimer) {
+                clearTimeout(simulateWatchdogTimer);
+            }
+            if (simulateForceReloadTimer) {
+                clearTimeout(simulateForceReloadTimer);
+                simulateForceReloadTimer = null;
+            }
+            simulateWatchdogTimer = setTimeout(() => {
+                setButtonLoading(simulateUpdateBtn, false);
+                if (window.LoadingOverlay && window.LoadingOverlay.hide) {
+                    window.LoadingOverlay.hide();
+                }
+                showNotification(
+                    "Reinstall timeout reached. Reloading page...",
+                    "warning",
+                    3000
+                );
+                setTimeout(() => location.reload(), 1200);
+            }, 30000);
+            try {
+                const controller = new AbortController();
+                const requestTimeout = setTimeout(() => controller.abort(), 15000);
+                const res = await fetch("/update-simulate", {
+                    method: "POST",
+                    signal: controller.signal,
+                });
+                clearTimeout(requestTimeout);
+                let data = null;
+                try {
+                    data = await res.json();
+                } catch (_) {
+                    data = null;
+                }
+                if (!res.ok || !data || data.status === "error") {
+                    throw new Error((data && data.error) || "Reinstall failed");
+                }
+                if (data.status === "restarting") {
+                    showNotification(data.message || "Restarting services...", "success");
+                    waitForReconnect = true;
+                    // Always force a reload shortly after restart begins so the UI
+                    // doesn't remain stuck on the loading overlay if websocket
+                    // reconnect events are missed.
+                    simulateForceReloadTimer = setTimeout(() => {
+                        showNotification("Reinstall complete. Reloading page...", "info", 2500);
+                        location.reload();
+                    }, 10000);
+                    // If no websocket disconnect happens shortly, assume restart
+                    // did not actually occur and clear loading UI to avoid hanging.
+                    setTimeout(() => {
+                        if (!websocketDisconnectedDuringUpdate) {
+                            if (simulateWatchdogTimer) {
+                                clearTimeout(simulateWatchdogTimer);
+                                simulateWatchdogTimer = null;
+                            }
+                            setButtonLoading(simulateUpdateBtn, false);
+                            if (window.LoadingOverlay && window.LoadingOverlay.hide) {
+                                window.LoadingOverlay.hide();
+                            }
+                            if (simulateForceReloadTimer) {
+                                clearTimeout(simulateForceReloadTimer);
+                                simulateForceReloadTimer = null;
+                            }
+                            showNotification(
+                                "No restart detected. Reloading page...",
+                                "warning",
+                                3000
+                            );
+                            setTimeout(() => location.reload(), 1200);
+                        }
+                    }, 8000);
+                    return;
+                }
+                showNotification(data.message || "Reinstall complete", "success");
+            } catch (err) {
+                console.error("Failed to reinstall current version:", err);
+                showNotification("Failed to reinstall current version", "error");
+            } finally {
+                if (!waitForReconnect) {
+                    if (simulateWatchdogTimer) {
+                        clearTimeout(simulateWatchdogTimer);
+                        simulateWatchdogTimer = null;
+                    }
+                    if (simulateForceReloadTimer) {
+                        clearTimeout(simulateForceReloadTimer);
+                        simulateForceReloadTimer = null;
+                    }
+                    setButtonLoading(simulateUpdateBtn, false);
+                    if (window.LoadingOverlay && window.LoadingOverlay.hide) {
+                        window.LoadingOverlay.hide();
+                    }
+                }
+            }
+        });
+    }
+
+    window.addEventListener("billy:websocket:connected", () => {
+        setButtonLoading(updateBtn, false);
+        setButtonLoading(simulateUpdateBtn, false);
+        websocketDisconnectedDuringUpdate = false;
+        if (simulateWatchdogTimer) {
+            clearTimeout(simulateWatchdogTimer);
+            simulateWatchdogTimer = null;
+        }
+        if (simulateForceReloadTimer) {
+            clearTimeout(simulateForceReloadTimer);
+            simulateForceReloadTimer = null;
+        }
     });
 })();
 
@@ -114,5 +274,3 @@ const ReleaseNotes = (() => {
     }
     return { init };
 })();
-
-
