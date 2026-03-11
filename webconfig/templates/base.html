@@ -22,7 +22,23 @@
 
     <!-- Global Notification Bar -->
     <div id="notification"
-         class="hidden w-full fixed top-0 left-0 text-center backdrop-blur-xs text-white font-semibold py-2 px-4 rounded shadow-lg z-[60] transition-opacity duration-300"></div>
+         class="hidden w-full fixed top-0 left-0 text-center text-white font-semibold py-2 px-4 rounded shadow-lg transition-opacity duration-300"
+         style="z-index: 2147483647;"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay"
+        class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-6"
+        style="z-index: 2147483000;">
+        <div>
+            <img src="{{ url_for('static', filename='images/status-reloading.gif') }}"
+                 alt="Reloading"
+                 class="w-full max-w-[300px] h-auto object-contain select-none"
+                 draggable="false">
+            <p id="loading-overlay-text" class="bg-zinc-900/80 border border-zinc-700 rounded-lg px-6 py-5 shadow-2xl w-full max-w-2xl text-sm text-zinc-200 text-center">
+                Restarting Billy... reconnecting interface.
+            </p>
+        </div>
+    </div>
 
     {% block scripts %}
     <script src="{{ url_for('static', filename='js/marked-min.js') }}"></script>
@@ -31,6 +47,7 @@
     <script src="{{ url_for('static', filename='js/app-config.js') }}"></script>
     <script src="{{ url_for('static', filename='js/log-panel.js') }}"></script>
     <script src="{{ url_for('static', filename='js/service-status.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/websocket.js') }}"></script>
     <script src="{{ url_for('static', filename='js/pin-profile.js') }}"></script>
     <script src="{{ url_for('static', filename='js/settings-form.js') }}"></script>
     <script src="{{ url_for('static', filename='js/persona-form.js') }}"></script>

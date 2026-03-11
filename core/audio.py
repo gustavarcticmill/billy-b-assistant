@@ -281,6 +281,14 @@ def handle_incoming_audio_chunk(audio_b64, buffer):
 
 def send_mic_audio(ws, samples, loop):
     try:
+        # Session teardown races can call this with invalid websocket/loop.
+        if ws is None or loop is None:
+            return
+        if getattr(ws, "closed", False):
+            return
+        if getattr(loop, "is_closed", lambda: False)():
+            return
+
         # Ensure samples is a proper numpy array
         if not isinstance(samples, np.ndarray):
             samples = np.array(samples)
@@ -299,7 +307,7 @@ def send_mic_audio(ws, samples, loop):
             samples = resample(samples.astype(np.float32), target_len).astype(np.int16)
         pcm = samples.astype(np.int16).tobytes()
 
-        future = asyncio.run_coroutine_threadsafe(
+        asyncio.run_coroutine_threadsafe(
             ws.send(
                 json.dumps({
                     "type": "input_audio_buffer.append",
@@ -311,10 +319,15 @@ def send_mic_audio(ws, samples, loop):
 
         # Don't block on websocket send - let it complete asynchronously
         # This significantly improves audio response latency
+    except RuntimeError as e:
+        # Typical during shutdown (event loop closed / scheduling after stop).
+        logger.verbose(f"Skipping mic chunk during shutdown: {e}", "ℹ️")
     except Exception as e:
-        logger.error(f"Failed to send audio chunk: {e}")
-        logger.error(
-            f"Samples type: {type(samples)}, shape: {getattr(samples, 'shape', 'no shape')}"
+        logger.warning(f"Failed to send audio chunk: {e}")
+        logger.verbose(
+            f"Mic chunk debug | type={type(samples)} "
+            f"| shape={getattr(samples, 'shape', 'no shape')}",
+            "🔍",
         )
 
 

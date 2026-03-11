@@ -114,6 +114,7 @@ class XAIProvider(RealtimeAIProvider):
             if requested_voice in self.get_supported_voices()
             else self.default_voice
         )
+        interrupt_response = bool(kwargs.get("interrupt_response", False))
 
         session_config = {
             "voice": voice,
@@ -122,7 +123,7 @@ class XAIProvider(RealtimeAIProvider):
                 "type": "server_vad",
                 **server_vad_params,
                 "create_response": True,
-                "interrupt_response": True,
+                "interrupt_response": interrupt_response,
             },
             "audio": {
                 "input": {"format": {"type": "audio/pcm", "rate": 24000}},

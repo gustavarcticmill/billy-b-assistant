@@ -63,7 +63,7 @@ def get_base_tools() -> list[dict[str, Any]]:
         {
             "name": "conversation_state",
             "type": "function",
-            "description": "MANDATORY: MUST CALL AFTER EVERY RESPONSE. Call this INTERNAL FUNCTION (do not speak it) at the end of your turn to indicate conversation state. Set expects_follow_up=true if you asked a question or need user input, false for complete statements. CRITICAL: NEVER call this as your ONLY response - you MUST generate spoken audio first, then call this function. If audio is unclear, say 'I didn't catch that' before calling this.",
+            "description": "CRITICAL: YOU MUST CALL THIS FUNCTION AFTER EVERY SINGLE RESPONSE. This is NON-NEGOTIABLE and REQUIRED for the system to function. Call this INTERNAL FUNCTION (do not speak it) at the end of your turn to indicate conversation state. Set expects_follow_up=true if you asked a question or need user input, false for complete statements. NEVER call this as your ONLY response - you MUST generate spoken audio first, then call this function. If audio is unclear, say 'I didn't catch that' before calling this. FAILURE TO CALL THIS FUNCTION WILL BREAK THE SYSTEM.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -96,6 +96,56 @@ def get_base_tools() -> list[dict[str, Any]]:
                     },
                 },
                 "required": ["name", "confidence"],
+            },
+        },
+        {
+            "name": "get_news_digest",
+            "type": "function",
+            "description": "Fetch fresh headlines, weather forecasts, or sports results. Use this when users ask for news, local weather, regional updates, sports programs, or match results. IMPORTANT: for headlines, provide a concise subject keyword so the tool can choose matching configured sources by keywords. CRITICAL: Before calling this tool, acknowledge VERY briefly (max 2 words), preferably exactly 'Checking.' Prefer user-provided location/team, otherwise rely on defaults.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "category": {
+                        "type": "string",
+                        "enum": ["headlines", "weather", "sports"],
+                        "description": "Digest type to fetch",
+                    },
+                    "query": {
+                        "type": "string",
+                        "description": "Optional topic for headlines (e.g., AI, elections)",
+                    },
+                    "subject": {
+                        "type": "string",
+                        "description": "Keyword-style subject used for source selection (e.g., technology, politics, finance, project updates, sports). Strongly recommended for headlines.",
+                    },
+                    "location": {
+                        "type": "string",
+                        "description": "City/region for weather (e.g., Amsterdam)",
+                    },
+                    "sport": {
+                        "type": "string",
+                        "description": "Sports league key (nfl, nba, mlb, nhl, epl)",
+                    },
+                    "team": {
+                        "type": "string",
+                        "description": "Optional team filter for sports",
+                    },
+                    "country": {
+                        "type": "string",
+                        "description": "Country code for regional headlines (e.g., US, NL)",
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Language code for feeds (e.g., en, nl)",
+                    },
+                    "max_items": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 5,
+                        "description": "How many items to fetch",
+                    },
+                },
+                "required": ["category"],
             },
         },
     ]

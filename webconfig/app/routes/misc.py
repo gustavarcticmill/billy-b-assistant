@@ -77,11 +77,16 @@ def stop_billy_only():
 @bp.route("/service/status")
 def service_status():
     try:
-        # Get service status
-        output = subprocess.check_output(
-            ["systemctl", "is-active", "billy.service"], stderr=subprocess.STDOUT
+        # Get service status without raising on non-zero exit codes.
+        # systemctl returns exit code 3 for inactive/failed units, which is expected.
+        result = subprocess.run(
+            ["systemctl", "is-active", "billy.service"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
         )
-        service_status = output.decode("utf-8").strip()
+        service_status = (result.stdout or "").strip() or "unknown"
     except FileNotFoundError:
         # systemctl not available (running manually), assume active
         service_status = "active"

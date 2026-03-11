@@ -53,7 +53,14 @@ class RealtimeAIProvider(ABC):
         """Connect to the provider's websocket and return the connection (without config)"""
         uri = self._get_websocket_uri()
         headers = self._get_headers()
-        return await websockets.asyncio.client.connect(uri, additional_headers=headers)
+        return await websockets.asyncio.client.connect(
+            uri,
+            additional_headers=headers,
+            open_timeout=30,
+            ping_interval=20,
+            ping_timeout=60,
+            close_timeout=2,
+        )
 
     @abstractmethod
     async def connect(

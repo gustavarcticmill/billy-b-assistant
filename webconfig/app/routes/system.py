@@ -6,11 +6,14 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from pathlib import Path
 
 from dotenv import find_dotenv, set_key
 from flask import Blueprint, jsonify, render_template, request
 from packaging.version import parse as parse_version
+
+from core.news_manager import load_news_sources, save_news_sources
 
 from ..core_imports import core_config, voice_provider_registry
 from ..state import (
@@ -61,7 +64,44 @@ CONFIG_KEYS = [
     "CURRENT_USER",
     "SHOW_RC_VERSIONS",
     "FLAP_ON_BOOT",
+    "NEWS_REQUEST_TIMEOUT_SECONDS",
 ]
+
+
+def _normalize_source_payload(data: dict) -> dict:
+    name = str(data.get("name") or "").strip()
+    url = str(data.get("url") or "").strip()
+    topics_raw = data.get("topics", [])
+
+    if not name:
+        raise ValueError("Source name is required")
+    if not url:
+        raise ValueError("Source URL is required")
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise ValueError("Source URL must start with http:// or https://")
+    return {
+        "name": name,
+        "url": url,
+        "topics": _normalize_topics(topics_raw),
+    }
+
+
+def _normalize_topics(raw_topics) -> list[str]:
+    if isinstance(raw_topics, str):
+        source = [part.strip().lower() for part in raw_topics.split(",")]
+    elif isinstance(raw_topics, list):
+        source = [str(part).strip().lower() for part in raw_topics]
+    else:
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for topic in source:
+        if not topic or topic in seen:
+            continue
+        seen.add(topic)
+        normalized.append(topic)
+    return normalized
 
 
 def _remove_path(path: Path, removed: list[str]) -> None:
@@ -390,6 +430,62 @@ def perform_update():
         ).start()
         return jsonify({"status": "updated", "version": latest})
     except subprocess.CalledProcessError as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@bp.route("/update-simulate", methods=["POST"])
+def simulate_update():
+    """Run update workflow against currently checked-out revision."""
+    try:
+        versions = load_versions()
+        latest = versions["version"].get("latest", "unknown")
+
+        # Keep current code version: reinstall deps for current checkout and restart services.
+        current_ref = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, text=True
+        ).strip()
+        subprocess.check_call(
+            ["git", "checkout", "--force", current_ref], cwd=PROJECT_ROOT
+        )
+
+        venv_pip = os.path.join(PROJECT_ROOT, "venv", "bin", "pip")
+        output = subprocess.check_output(
+            [venv_pip, "install", "--upgrade", "-r", "requirements.txt"],
+            cwd=PROJECT_ROOT,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        logger.info(f"📦 Simulated update pip output:\n{output}")
+
+        actual_current = get_current_version()
+        save_versions(actual_current, latest)
+
+        threading.Thread(
+            target=lambda: (
+                time.sleep(2),
+                subprocess.run([
+                    "sudo",
+                    "systemctl",
+                    "restart",
+                    "billy-webconfig.service",
+                ]),
+            )
+        ).start()
+        threading.Thread(
+            target=lambda: (
+                time.sleep(2),
+                subprocess.run(["sudo", "systemctl", "restart", "billy.service"]),
+            )
+        ).start()
+
+        return jsonify({
+            "status": "restarting",
+            "message": "Simulated update complete. Restarting services...",
+            "version": actual_current,
+        })
+    except subprocess.CalledProcessError as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+    except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
@@ -726,6 +822,74 @@ def auto_refresh_config():
         })
     except Exception as e:
         return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@bp.route("/news/sources", methods=["GET"])
+def get_news_sources():
+    try:
+        return jsonify({"sources": load_news_sources()})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/news/sources", methods=["POST"])
+def add_news_source():
+    data = request.get_json(silent=True) or {}
+    try:
+        normalized = _normalize_source_payload(data)
+        sources = load_news_sources()
+        normalized["id"] = str(data.get("id") or f"src-{uuid.uuid4().hex[:10]}")
+        if any(source.get("id") == normalized["id"] for source in sources):
+            return jsonify({"error": "Source id already exists"}), 409
+        sources.append(normalized)
+        saved = save_news_sources(sources)
+        return jsonify({"status": "ok", "sources": saved})
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/news/sources/<source_id>", methods=["PATCH"])
+def update_news_source(source_id: str):
+    data = request.get_json(silent=True) or {}
+    try:
+        sources = load_news_sources()
+        source = next((src for src in sources if src.get("id") == source_id), None)
+        if not source:
+            return jsonify({"error": "Source not found"}), 404
+
+        merged = dict(source)
+        merged.update({
+            "name": data.get("name", source.get("name")),
+            "url": data.get("url", source.get("url")),
+            "topics": data.get("topics", source.get("topics", [])),
+        })
+        normalized = _normalize_source_payload(merged)
+        normalized["id"] = source_id
+
+        updated_sources = [
+            normalized if src.get("id") == source_id else src for src in sources
+        ]
+        saved = save_news_sources(updated_sources)
+        return jsonify({"status": "ok", "sources": saved})
+    except ValueError as ve:
+        return jsonify({"error": str(ve)}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@bp.route("/news/sources/<source_id>", methods=["DELETE"])
+def delete_news_source(source_id: str):
+    try:
+        sources = load_news_sources()
+        filtered = [source for source in sources if source.get("id") != source_id]
+        if len(filtered) == len(sources):
+            return jsonify({"error": "Source not found"}), 404
+        saved = save_news_sources(filtered)
+        return jsonify({"status": "ok", "sources": saved})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @bp.route('/get-env')

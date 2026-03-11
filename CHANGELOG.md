@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [2.1.0] — 2026-03-13
+
+### Added
+- **OpenAI Realtime Model Support**: Added support for selecting `gpt-realtime-1.5` in the Web UI and `.env` configuration.
+- **News Digest Tool**: Added a new `get_news_digest` function-call tool so Billy can fetch live headlines, weather forecasts, and sports scoreboards with optional topic, team, and regional filters.
+- **News Sources Manager (Web UI)**: Added a UI list to add/remove/toggle RSS headline sources and persist them for Billy's news briefings.
+- **MQTT commands**: Added discovery/config entities for `Billy Restart`, `Billy Reboot`, and `Billy Listen` on `billy/command`. Added support for the `listen` command over MQTT to start/stop Billy listening remotely. (contribution by: @Marko181)
+
+
+### Changed
+
+- **Restart Controls (Web UI)**: Removed the separate **Restart UI** button to avoid confusion. The remaining **Restart** button now performs the same full restart behavior as the old Restart UI action, restarting both `billy.service` and `billy-webconfig.service`.
+- **WebSocket Integration**: Replaced HTTP polling with WebSocket for real-time status and log updates in the Web UI, significantly reducing network overhead and improving responsiveness.
+- **Listening State Feedback**: Updated head movement timing so the head moves out when Billy is actually listening, rather than during the wake-up clip.
+- **Moved .env editor**: Moved the .env editor from the header to the Advanced Settings section.
+- **MQTT Startup Behavior**: MQTT broker connection now retries in the background until successful instead of failing once at startup. (contribution by: @Marko181)
+
+### Fixed
+
+- **Service Status Endpoint**: Fixed `/service/status` returning HTTP 500 when `billy.service` is inactive (for example during mic/speaker tests). The endpoint now reports inactive/failed states correctly instead of crashing.
+- **Manual Interrupt Flow**: Simplified interruption handling back to button-first behavior. During a session, one press now interrupts the current response and reopens the mic, while a second press stops the session.
+- **Session Audio Stability**: Improved wake-up-to-listening handoff so Billy more reliably waits for the wake-up sound to finish before opening the mic, reducing stuck startup states and false early listening behavior.
+- **Listening and Shutdown Reliability**: Refined mic/session cleanup and state transitions to reduce hanging stops, duplicate stop handling, and noisy shutdown behavior during follow-up and retry flows.
+- **User Greeting**: Fixed asyncio.sleep calls in user identification flow that prevented Billy from acknowledging new user profiles.
+- **Wake-up sound**: Trimmed silent audio segments from the default wake-up sounds to improve responsiveness.
+
 ## [2.0.6] — 2026-03-05
 
 ### Fixed

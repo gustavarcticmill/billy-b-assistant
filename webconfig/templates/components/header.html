@@ -21,11 +21,6 @@
                 <!-- Dropdown -->
                 <div id="power-dropdown"
                      class="absolute left-0 mt-2 w-40 bg-zinc-800 border border-zinc-700 rounded shadow-lg hidden z-30">
-                    <button id="restart-ui-btn"
-                            class="w-full flex items-center gap-2 px-3 py-2 text-sm text-white hover:bg-zinc-700 transition-colors">
-                        <span class="material-icons text-emerald-400">refresh</span>
-                        Restart UI
-                    </button>
                     <button id="reboot-billy-btn"
                             class="w-full flex items-center gap-2 px-3 py-2 text-sm text-white hover:bg-zinc-700 transition-colors">
                         <span class="material-icons text-amber-400">restart_alt</span>
@@ -52,6 +47,14 @@
             <span class="text-xs hidden md:block">Songs</span>
         </button>
 
+        <!-- News Sources button -->
+        <button id="news-sources-btn"
+                class="bg-zinc-700 hover:bg-zinc-600 transition-colors text-white text-sm py-1 px-2 rounded flex gap-1.5 items-center cursor-pointer"
+                title="Manage News Sources">
+            <span class="material-icons">newspaper</span>
+            <span class="text-xs hidden md:block">News</span>
+        </button>
+
         <!-- Settings button -->
         <button id="user-profile-btn"
                 class="bg-zinc-700 hover:bg-zinc-600 transition-colors text-white text-sm py-1 px-2 rounded flex gap-1.5 items-center cursor-pointer"
@@ -64,12 +67,6 @@
                 class="bg-zinc-700 hover:bg-zinc-600 transition-all text-white text-sm py-1 px-2 rounded flex gap-1.5 items-center cursor-pointer"
                 title="Show debug log">
             <span class="material-icons bug_report">bug_report</span>
-        </button>
-
-        <button id="toggle-env-btn"
-                class="bg-zinc-700 hover:bg-zinc-600 transition-all text-white text-sm py-1 px-2 rounded flex gap-1.5 items-center cursor-pointer"
-                title="Show .env file editor">
-            <span class="material-icons">admin_panel_settings</span>
         </button>
 
         <div id="version-info" class="text-sm flex flex-col md:items-end relative">
@@ -147,30 +144,6 @@
                     class="sticky bottom-2 left-full mr-3 ml-auto bg-zinc-800 hover:bg-zinc-700 text-white px-2 py-1 rounded z-10 shadow flex items-center justify-center cursor-pointer">
                 <span class="material-icons">arrow_downward</span>
             </button>
-        </div>
-    </section>
-
-    <!-- Env Panel -->
-    <section id="env-panel" class="mt-2 relative hidden">
-        <div class="relative rounded  text-sm transition-all duration-300  text-white">
-            <label for="env-textarea" class="sr-only">Environment Configuration</label>
-            <textarea id="env-textarea" rows="25"
-                      class="w-full h-64  bg-zinc-800/80 text-amber-500 p-3 rounded font-mono resize-y border border-yellow-600"
-                      spellcheck="false">Loading .env…</textarea>
-
-            <!-- Save button -->
-            <div class="mt-2 flex justify-end gap-2">
-                <div class=" bg-yellow-700/80 text-yellow-100 p-2 rounded border border-yellow-600 flex grow gap-2 items-center">
-                    <span class="material-icons">warning</span>
-                    Changes will be written to .env as-is. Invalid values could cause errors. Save only if you're sure
-                    of your changes.
-                </div>
-
-                <button id="save-env-btn"
-                        class="bg-amber-500 hover:bg-amber-400 text-zinc-800 text-sm font-semibold  py-1 px-4 rounded shadow">
-                    Save .env
-                </button>
-            </div>
         </div>
     </section>
 

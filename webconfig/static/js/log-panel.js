@@ -1,9 +1,9 @@
 // ===================== Header Secondary Actions (Log Panel) =====================
 const LogPanel = (() => {
-    let autoScrollEnabled = false;
+    let autoScrollEnabled = true;  // Start with auto-scroll enabled
     let isLogHidden = true;
-    let isEnvHidden = true;
     let isReleaseHidden = true;
+    let restoreSettingsPanelAfterEnvClose = false;
 
     const rebootBilly = async () => {
         if (!confirm("Are you sure you want to reboot Billy? This will reboot the whole system.")) return;
@@ -36,21 +36,6 @@ const LogPanel = (() => {
         } catch (err) {
             console.error("Failed to shutdown Billy:", err);
             showNotification("Failed to shutdown Billy", "error");
-        }
-    };
-
-    const restartUI = async () => {
-        try {
-            const res = await fetch('/restart', {method: 'POST'});
-            const data = await res.json();
-            if (data.status === "ok") {
-                showNotification("Restarting UI…", "success");
-                setTimeout(() => location.reload(), 3000);
-            } else {
-                showNotification(data.error || "Restart failed", "error");
-            }
-        } catch (err) {
-            showNotification(err.message, "error");
         }
     };
 
@@ -185,17 +170,45 @@ const LogPanel = (() => {
     };
 
     const fetchLogs = async () => {
-        const res = await fetch("/logs");
-        const data = await res.json();
-        const logOutput = document.getElementById("log-output");
-        const logContainer = document.getElementById("log-container");
-        logOutput.textContent = data.logs || "No logs found.";
+        try {
+            const res = await fetch("/logs");
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            updateLogsUI(data.logs || "No logs found.");
+            return data;
+        } catch (err) {
+            const serviceStatusApi =
+                window.ServiceStatus ||
+                (typeof ServiceStatus !== "undefined" ? ServiceStatus : null);
+            const restartInProgress =
+                serviceStatusApi &&
+                typeof serviceStatusApi.isRestartInProgress === "function" &&
+                serviceStatusApi.isRestartInProgress();
+
+            if (restartInProgress) {
+                updateLogsUI("Restart in progress... waiting for logs to reconnect.");
+                return {logs: ""};
+            }
+
+            console.error("Failed to fetch logs:", err);
+            return {logs: ""};
+        }
+    };
+
+    const updateLogsUI = (logs) => {
+        if (!elements.logOutput || !elements.logContainer) return;
+        elements.logOutput.textContent = logs;
         if (autoScrollEnabled) {
             requestAnimationFrame(() => {
-                logContainer.scrollTop = logContainer.scrollHeight;
+                elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
             });
         }
     };
+
+    // Expose for WebSocket
+    window.updateLogs = updateLogsUI;
 
     const toggleLogPanel = () => {
         isLogHidden = !isLogHidden;
@@ -204,16 +217,40 @@ const LogPanel = (() => {
         elements.toggleBtn.classList.toggle("bg-zinc-700", isLogHidden);
     };
 
-    const toggleEnvPanel = () => {
-        isEnvHidden = !isEnvHidden;
-        elements.envPanel.classList.toggle("hidden", isEnvHidden);
-        elements.toggleEnvBtn.classList.toggle("bg-amber-500", !isEnvHidden);
-        elements.toggleEnvBtn.classList.toggle("bg-zinc-700", isEnvHidden);
-        if (!isEnvHidden) {
-            fetch('/get-env')
-                .then(res => res.text())
-                .then(text => elements.envTextarea.value = text.trim())
-                .catch(() => showNotification("An error occurred while loading .env", "error"));
+    const loadEnvContent = async () => {
+        try {
+            const res = await fetch('/get-env');
+            const text = await res.text();
+            if (elements.envTextarea) {
+                elements.envTextarea.value = text.trim();
+            }
+        } catch {
+            showNotification("An error occurred while loading .env", "error");
+        }
+    };
+
+    const openEnvEditorModal = async () => {
+        if (!elements.envEditorModal) return;
+        const settingsPanel = document.getElementById("settings-panel");
+        if (settingsPanel && !settingsPanel.classList.contains("hidden")) {
+            settingsPanel.classList.add("hidden");
+            restoreSettingsPanelAfterEnvClose = true;
+        } else {
+            restoreSettingsPanelAfterEnvClose = false;
+        }
+        elements.envEditorModal.classList.remove("hidden");
+        await loadEnvContent();
+    };
+
+    const closeEnvEditorModal = () => {
+        if (!elements.envEditorModal) return;
+        elements.envEditorModal.classList.add("hidden");
+        if (restoreSettingsPanelAfterEnvClose) {
+            const settingsPanel = document.getElementById("settings-panel");
+            if (settingsPanel) {
+                settingsPanel.classList.remove("hidden");
+            }
+            restoreSettingsPanelAfterEnvClose = false;
         }
     };
 
@@ -316,7 +353,7 @@ const LogPanel = (() => {
         elements.scrollBtn.classList.toggle("bg-zinc-800", !autoScrollEnabled);
         elements.scrollBtn.title = autoScrollEnabled ? "Auto-scroll ON" : "Auto-scroll OFF";
         if (autoScrollEnabled) {
-            elements.logOutput.scrollTop = elements.logOutput.scrollHeight;
+            elements.logContainer.scrollTop = elements.logContainer.scrollHeight;
         }
     };
 
@@ -372,15 +409,17 @@ const LogPanel = (() => {
             scrollBtn: document.getElementById("scroll-bottom-btn"),
             toggleBtn: document.getElementById("toggle-log-btn"),
             logPanel: document.getElementById("log-panel"),
-            toggleEnvBtn: document.getElementById("toggle-env-btn"),
-            envPanel: document.getElementById("env-panel"),
+            openEnvEditorBtn: document.getElementById("open-env-editor-modal-btn"),
+            envEditorModal: document.getElementById("env-editor-modal"),
+            closeEnvEditorModalBtn: document.getElementById("close-env-editor-modal"),
+            cancelEnvEditorModalBtn: document.getElementById("cancel-env-editor-modal"),
+            envEditorForm: document.getElementById("env-editor-form"),
             envTextarea: document.getElementById("env-textarea"),
             saveEnvBtn: document.getElementById("save-env-btn"),
             toggleMotionBtn: document.getElementById("toggle-motion-btn"),
             powerBtn: document.getElementById("power-btn"),
             powerDropdown: document.getElementById("power-dropdown"),
             rebootBillyBtn: document.getElementById("reboot-billy-btn"),
-            restartUIBtn: document.getElementById("restart-ui-btn"),
             shutdownBillyBtn: document.getElementById("shutdown-billy-btn"),
             toggleReleaseBtn: document.getElementById("current-version"),
             releasePanel: document.getElementById("release-panel"),
@@ -410,12 +449,33 @@ const LogPanel = (() => {
         elements.toggleBtn.addEventListener("click", toggleLogPanel);
         elements.toggleFullscreenBtn.addEventListener("click", toggleFullscreenLog);
         elements.scrollBtn.addEventListener("click", toggleAutoScroll);
-        elements.toggleEnvBtn.addEventListener("click", toggleEnvPanel);
         elements.toggleMotionBtn.addEventListener("click", toggleMotion);
-        elements.saveEnvBtn.addEventListener("click", saveEnv);
+        if (elements.openEnvEditorBtn) {
+            elements.openEnvEditorBtn.addEventListener("click", openEnvEditorModal);
+        }
+        if (elements.closeEnvEditorModalBtn) {
+            elements.closeEnvEditorModalBtn.addEventListener("click", closeEnvEditorModal);
+        }
+        if (elements.cancelEnvEditorModalBtn) {
+            elements.cancelEnvEditorModalBtn.addEventListener("click", closeEnvEditorModal);
+        }
+        if (elements.envEditorModal) {
+            elements.envEditorModal.addEventListener("click", (e) => {
+                if (e.target === elements.envEditorModal) {
+                    closeEnvEditorModal();
+                }
+            });
+        }
+        if (elements.envEditorForm) {
+            elements.envEditorForm.addEventListener("submit", (e) => {
+                e.preventDefault();
+                saveEnv();
+            });
+        } else if (elements.saveEnvBtn) {
+            elements.saveEnvBtn.addEventListener("click", saveEnv);
+        }
         
         elements.rebootBillyBtn.addEventListener("click", rebootBilly);
-        elements.restartUIBtn.addEventListener("click", restartUI);
         elements.shutdownBillyBtn.addEventListener("click", shutdownBilly);
         
         // Log level control
