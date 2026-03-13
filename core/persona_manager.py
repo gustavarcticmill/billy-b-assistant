@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from .logger import logger
+from .realtime_ai_provider import voice_provider_registry
 
 
 class PersonaManager:
@@ -161,6 +162,8 @@ class PersonaManager:
             logger.warning(f"Persona not available: {persona_name}")
             return False
 
+        # Force reload from disk in case persona.ini was edited during runtime.
+        self.clear_persona_cache(persona_name)
         self.current_persona = persona_name
         logger.info(f"Switched to persona: {persona_name}", "🎭")
         return True
@@ -176,10 +179,29 @@ class PersonaManager:
     def get_persona_voice(self, persona_name: str) -> str:
         """Get the voice setting for a specific persona."""
         persona_data = self.load_persona(persona_name)
-        if not persona_data:
-            return "ballad"  # Default voice
+        try:
+            provider = voice_provider_registry.get_provider()
+            default_voice = provider.default_voice
+            supported_voices = set(provider.get_supported_voices())
+        except Exception:
+            default_voice = "ballad"
+            supported_voices = {"ballad"}
 
-        return persona_data['meta'].get('voice', 'ballad')
+        if not persona_data:
+            return default_voice
+
+        raw_voice = str(persona_data.get("meta", {}).get("voice", "")).strip().lower()
+        if not raw_voice:
+            return default_voice
+
+        if raw_voice not in supported_voices:
+            logger.warning(
+                f"Persona '{persona_name}' has unsupported voice '{raw_voice}'. "
+                f"Using provider default '{default_voice}'."
+            )
+            return default_voice
+
+        return raw_voice
 
     def get_current_persona_voice(self) -> str:
         """Get the voice setting for the current persona."""

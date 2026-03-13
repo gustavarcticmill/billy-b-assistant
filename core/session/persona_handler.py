@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+from ..config import TEXT_ONLY_MODE
 from ..logger import logger
 from ..persona_manager import persona_manager
 
@@ -81,6 +82,7 @@ class PersonaHandler:
 
             persona_manager.switch_persona(persona_name)
             await self._update_session_with_persona()
+            await self._notify_persona_change(persona_name)
 
             persona_data = persona_manager.get_current_persona_data()
             persona_desc = (
@@ -154,14 +156,16 @@ class PersonaHandler:
                 })
                 return
 
-            if self._check_voice_change(new_persona):
-                await self._restart_for_voice_change(new_persona)
-                return
-
+            voice_changed = self._check_voice_change(new_persona)
             current_user.set_preferred_persona(new_persona)
             persona_manager.switch_persona(new_persona)
             await self._update_session_with_persona()
             await self._notify_persona_change(new_persona)
+            if voice_changed:
+                logger.info(
+                    f"Applied voice change for persona '{new_persona}' via session.update",
+                    "🎭",
+                )
 
             persona_data = persona_manager.get_current_persona_data()
             persona_desc = (
@@ -192,13 +196,22 @@ class PersonaHandler:
         try:
             from ..session_manager import get_instructions_with_user_context
 
-            await self.session._ws_send_json({
+            session_update = {
                 "type": "session.update",
                 "session": {
                     "type": "realtime",
                     "instructions": get_instructions_with_user_context(),
                 },
-            })
+            }
+
+            if not TEXT_ONLY_MODE:
+                session_update["session"]["audio"] = {
+                    "output": {
+                        "voice": persona_manager.get_current_persona_voice(),
+                    }
+                }
+
+            await self.session._ws_send_json(session_update)
             logger.info("Updated session with persona context", "🎭")
         except Exception as e:
             logger.warning(f"Failed to update session: {e}")

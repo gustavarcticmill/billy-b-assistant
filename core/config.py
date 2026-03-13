@@ -33,6 +33,8 @@ TOOL_INSTRUCTIONS = """
 AFTER you speak, ALWAYS call conversation_state(expects_follow_up=true/false).
 Set expects_follow_up=true if you asked a question, false otherwise.
 NEVER skip this - the system breaks without it.
+NEVER speak or print tool calls out loud. Do NOT include text like
+"conversation_state(...)" in spoken output. Tool calls are internal only.
 
 === TOOLS ===
 
@@ -54,9 +56,31 @@ SONGS: Use play_song for special songs
 3. Call conversation_state (MANDATORY - NEVER skip this)
 
 EXAMPLES:
-✓ User: "Hello" -> Speak "Hey!" -> Call conversation_state(expects_follow_up=false)
-✓ User: "What's up?" -> Speak "Not much, you?" -> Call conversation_state(expects_follow_up=true)
+✓ User: "Hello" -> Speak "Hey!" -> [internal tool call: conversation_state(expects_follow_up=false)]
+✓ User: "What's up?" -> Speak "Not much, you?" -> [internal tool call: conversation_state(expects_follow_up=true)]
+✗ User: "Hello" -> Speak "Hey! conversation_state(expects_follow_up=false)" (WRONG: tool call spoken)
 ✗ User: "Hello" -> Speak "Hey!" -> NO conversation_state (SYSTEM BREAKS)
+""".strip()
+
+TOOL_INSTRUCTIONS_NO_CONVERSATION_STATE = """
+=== TOOLS ===
+
+PERSONALITY: Use update_personality when users request changes (e.g., "be funnier" -> update_personality({"humor": 80}))
+
+SMART HOME: Only call smart_home_command for DIRECT commands ("turn on lights"). If asked to "ask if" or "check if", just speak the question.
+NEWS: Use get_news_digest for headlines, weather, and sports updates. Team/location are OPTIONAL inputs. If missing, call the tool anyway with available context and configured sources first; only ask a follow-up if the tool response still lacks enough information. IMPORTANT: for headlines, always set a concise `subject` based on user intent (use keyword-style labels like "technology", "sports", "project updates", "weather", "finance") so source keywords are used during source selection. Also set `query` when user asks about a specific topic/person/event. BEFORE calling the news tool, acknowledge VERY briefly (max 2 words), preferably exactly: "Checking."
+
+USER SYSTEM:
+- identify_user: Call when someone introduces themselves ("I am Tom")
+- store_memory: Store lasting facts users voluntarily share (NOT answers to your questions)
+- manage_profile/switch_persona: Change personas
+
+SONGS: Use play_song for special songs
+
+=== RESPONSE FLOW ===
+1. [Optional: call tool functions]
+2. Generate speech (ALWAYS speak - never respond with only function calls)
+3. End naturally. Do NOT speak or print internal tool-call text.
 """.strip()
 
 CUSTOM_INSTRUCTIONS = _config.get("META", "instructions")
@@ -91,6 +115,22 @@ Use your backstory to inspire jokes, metaphors, or occasional references in conv
 # === OpenAI Config ===
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-realtime-mini")
+CONVERSATION_STATE_ENABLED_MODELS = {"gpt-realtime", "gpt-realtime-1.5"}
+
+
+def is_conversation_state_enabled(model: str | None = None) -> bool:
+    """Whether conversation_state tool/instructions should be enabled."""
+    m = (model or os.getenv("OPENAI_MODEL", OPENAI_MODEL) or "").strip()
+    return m in CONVERSATION_STATE_ENABLED_MODELS
+
+
+def get_tool_instructions(model: str | None = None) -> str:
+    """Return tool instructions appropriate for the selected model."""
+    return (
+        TOOL_INSTRUCTIONS
+        if is_conversation_state_enabled(model)
+        else TOOL_INSTRUCTIONS_NO_CONVERSATION_STATE
+    )
 
 
 # === XAI Config ===

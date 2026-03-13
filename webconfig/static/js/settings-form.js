@@ -1,5 +1,25 @@
 // ===================== SETTINGS FORM =====================
 const SettingsForm = (() => {
+    const MODEL_ALIASES = {
+        // Legacy/compat aliases mapped to current options
+        'gpt-4o-realtime': 'gpt-realtime',
+        'gpt-4o-realtime-preview': 'gpt-4o-mini-realtime-preview'
+    };
+
+    const normalizeModelValue = (value) => {
+        if (!value) return value;
+        const v = String(value).trim();
+        return MODEL_ALIASES[v] || v;
+    };
+
+    const setSelectValueSafely = (element, value) => {
+        if (!element || !value) return false;
+        const exists = Array.from(element.options).some(opt => opt.value === value);
+        if (!exists) return false;
+        element.value = value;
+        return true;
+    };
+
     const populateDropdowns = (cfg) => {
         // Populate dropdown values with saved configuration
         const dropdowns = [
@@ -19,10 +39,24 @@ const SettingsForm = (() => {
                 const savedValue = localStorage.getItem(`dropdown_${id}`);
                 // Then fall back to config value
                 const configValue = cfg[key];
-                const valueToSet = savedValue || configValue;
-                
-                if (valueToSet) {
-                    element.value = valueToSet;
+                // For OPENAI_MODEL, prefer .env/config over localStorage.
+                const preferredValue = id === 'OPENAI_MODEL' ? configValue : (savedValue || configValue);
+                const fallbackValue = id === 'OPENAI_MODEL' ? savedValue : null;
+
+                if (id === 'OPENAI_MODEL') {
+                    const normalizedPreferred = normalizeModelValue(preferredValue);
+                    const normalizedFallback = normalizeModelValue(fallbackValue);
+
+                    if (setSelectValueSafely(element, normalizedPreferred)) {
+                        localStorage.setItem(`dropdown_${id}`, normalizedPreferred);
+                    } else if (setSelectValueSafely(element, normalizedFallback)) {
+                        localStorage.setItem(`dropdown_${id}`, normalizedFallback);
+                    } else {
+                        // Clear stale localStorage when no matching option exists.
+                        localStorage.removeItem(`dropdown_${id}`);
+                    }
+                } else if (preferredValue) {
+                    setSelectValueSafely(element, preferredValue);
                 }
             }
         });
@@ -128,8 +162,12 @@ const SettingsForm = (() => {
                         dropdowns.forEach(id => {
                             const element = document.getElementById(id);
                             if (element && refreshData.config[id]) {
-                                element.value = refreshData.config[id];
-                                localStorage.setItem(`dropdown_${id}`, refreshData.config[id]);
+                                const value = id === 'OPENAI_MODEL'
+                                    ? normalizeModelValue(refreshData.config[id])
+                                    : refreshData.config[id];
+                                if (setSelectValueSafely(element, value)) {
+                                    localStorage.setItem(`dropdown_${id}`, value);
+                                }
                             }
                         });
                         

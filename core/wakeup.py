@@ -77,7 +77,7 @@ class WakeupClipGenerator:
         )
 
         audio_bytes = await provider.generate_audio_clip(
-            prompt="Repeat this literal message:" + prompt,
+            prompt=prompt,
             voice=self.voice,
             instructions=instructions,
         )

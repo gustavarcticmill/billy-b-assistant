@@ -5,6 +5,7 @@ Tool management for filtering and providing tools based on session mode.
 from typing import Any
 
 from ..base_tools import get_base_tools, get_user_tools
+from ..config import is_conversation_state_enabled
 from ..logger import logger
 
 
@@ -24,11 +25,17 @@ class ToolManager:
             self._user_tools = get_user_tools()
 
         if mode == "guest":
-            return self._base_tools
-        if mode == "user":
-            return self._base_tools + self._user_tools
-        logger.warning(f"Unknown mode: {mode}, using base tools")
-        return self._base_tools
+            tools = list(self._base_tools)
+        elif mode == "user":
+            tools = list(self._base_tools) + list(self._user_tools)
+        else:
+            logger.warning(f"Unknown mode: {mode}, using base tools")
+            tools = list(self._base_tools)
+
+        if not is_conversation_state_enabled():
+            tools = [t for t in tools if t.get("name") != "conversation_state"]
+
+        return tools
 
     def refresh_tools(self):
         """Refresh tool definitions (e.g., after song list changes)."""
