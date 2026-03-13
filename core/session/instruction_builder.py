@@ -5,7 +5,7 @@ Instruction builder for generating AI prompts with user/persona context.
 from dataclasses import dataclass
 from typing import Optional
 
-from ..config import INSTRUCTIONS, TOOL_INSTRUCTIONS
+from ..config import INSTRUCTIONS, get_tool_instructions
 from ..persona import PersonaProfile
 from ..persona_manager import persona_manager
 
@@ -41,7 +41,7 @@ class InstructionBuilder:
         if persona_data and persona_instructions:
             sections = [
                 f"# Role & Objective\n{persona_instructions}",
-                f"# Tools\n{TOOL_INSTRUCTIONS.strip()}",
+                f"# Tools\n{get_tool_instructions().strip()}",
                 self._build_personality_section(persona_data),
                 self._build_backstory_section(persona_data),
             ]
@@ -70,7 +70,7 @@ class InstructionBuilder:
         if persona_data and persona_instructions:
             sections = [
                 f"# Role & Objective\n{persona_instructions}",
-                f"# Tools\n{TOOL_INSTRUCTIONS.strip()}",
+                f"# Tools\n{get_tool_instructions().strip()}",
                 self._build_personality_section(persona_data),
                 self._build_backstory_section(persona_data),
                 self._build_user_context_section(user_profile),

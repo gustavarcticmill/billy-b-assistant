@@ -63,7 +63,7 @@ def get_base_tools() -> list[dict[str, Any]]:
         {
             "name": "conversation_state",
             "type": "function",
-            "description": "CRITICAL: YOU MUST CALL THIS FUNCTION AFTER EVERY SINGLE RESPONSE. This is NON-NEGOTIABLE and REQUIRED for the system to function. Call this INTERNAL FUNCTION (do not speak it) at the end of your turn to indicate conversation state. Set expects_follow_up=true if you asked a question or need user input, false for complete statements. NEVER call this as your ONLY response - you MUST generate spoken audio first, then call this function. If audio is unclear, say 'I didn't catch that' before calling this. FAILURE TO CALL THIS FUNCTION WILL BREAK THE SYSTEM.",
+            "description": "CRITICAL: YOU MUST CALL THIS FUNCTION AFTER EVERY SINGLE RESPONSE. This is NON-NEGOTIABLE and REQUIRED for the system to function. Call this INTERNAL FUNCTION (do not speak it) at the end of your turn to indicate conversation state. Set expects_follow_up=true if you asked a question or need user input, false for complete statements. NEVER call this as your ONLY response - you MUST generate spoken audio first, then call this function. NEVER include literal tool call text in speech/output (e.g., do not say or print 'conversation_state(...)'). If audio is unclear, say 'I didn't catch that' before calling this. FAILURE TO CALL THIS FUNCTION WILL BREAK THE SYSTEM.",
             "parameters": {
                 "type": "object",
                 "properties": {

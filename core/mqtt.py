@@ -1,12 +1,13 @@
 import asyncio
 import json
+import os
 import subprocess
 import threading
 import time
 
 import paho.mqtt.client as mqtt
 
-from .config import MQTT_HOST, MQTT_PASSWORD, MQTT_PORT, MQTT_USERNAME
+from .config import CHUNK_MS, MQTT_HOST, MQTT_PASSWORD, MQTT_PORT, MQTT_USERNAME
 from .logger import logger
 from .movements import stop_all_motors
 
@@ -28,6 +29,7 @@ def on_connect(client, userdata, flags, rc):
         client.subscribe("billy/command")
         client.subscribe("billy/say")  # single endpoint
         client.subscribe("billy/song")
+        client.subscribe("billy/wakeup/play")
     else:
         logger.warning(f"MQTT connection failed with code {rc}")
 
@@ -301,11 +303,39 @@ def mqtt_start_listening():
         if button_mod.session_thread and button_mod.session_thread.is_alive():
             button_mod.session_thread.join(timeout=2.0)
             if button_mod.session_thread.is_alive():
-                logger.error(
-                    "Previous session thread did not finish, aborting new session", "❌"
+                logger.warning(
+                    "Previous session thread did not finish, attempting forced stop",
+                    "⚠️",
                 )
-                button_mod._session_start_lock.release()
-                return
+                if button_mod.session_instance and button_mod.session_instance.loop:
+                    with contextlib.suppress(Exception):
+                        future = asyncio.run_coroutine_threadsafe(
+                            button_mod.session_instance.request_stop(),
+                            button_mod.session_instance.loop,
+                        )
+                        future.result(timeout=1.0)
+                    with contextlib.suppress(Exception):
+                        future = asyncio.run_coroutine_threadsafe(
+                            button_mod.session_instance._close_ws(timeout=0.5),
+                            button_mod.session_instance.loop,
+                        )
+                        future.result(timeout=2.0)
+                button_mod.session_thread.join(timeout=1.5)
+                if button_mod.session_thread.is_alive():
+                    if not button_mod.is_active:
+                        logger.warning(
+                            "Detaching stale inactive session thread and continuing",
+                            "🧹",
+                        )
+                        button_mod.session_thread = None
+                        button_mod.session_instance = None
+                    else:
+                        logger.error(
+                            "Previous session thread did not finish, aborting new session",
+                            "❌",
+                        )
+                        button_mod._session_start_lock.release()
+                        return
 
         button_mod.audio.ensure_playback_worker_started(button_mod.config.CHUNK_MS)
         button_mod.audio.playback_done_event.clear()
@@ -360,7 +390,19 @@ def mqtt_stop_listening():
             try:
                 future.result(timeout=5.0)
             except TimeoutError:
-                future.cancel()
+                logger.warning("MQTT stop timeout, forcing cleanup", "⚠️")
+                with contextlib.suppress(Exception):
+                    force_stop_future = asyncio.run_coroutine_threadsafe(
+                        button_mod.session_instance.request_stop(),
+                        button_mod.session_instance.loop,
+                    )
+                    force_stop_future.result(timeout=1.0)
+                with contextlib.suppress(Exception):
+                    force_close_future = asyncio.run_coroutine_threadsafe(
+                        button_mod.session_instance._close_ws(timeout=0.5),
+                        button_mod.session_instance.loop,
+                    )
+                    force_close_future.result(timeout=2.0)
 
     button_mod.is_active = False
 
@@ -448,3 +490,59 @@ def on_message(client, userdata, msg):
                 print("⚠️ SONG command received, but song name was empty")
         except Exception as e:
             logger.error(f"Failed to run play_song(): {e}")
+        return
+
+    if msg.topic == "billy/wakeup/play":
+        try:
+            payload = json.loads(msg.payload.decode() or "{}")
+            index = int(payload.get("index", 0))
+            persona_name = str(payload.get("persona", "")).strip() or None
+
+            if index < 1 or index > 99:
+                logger.warning(
+                    f"Invalid wakeup preview index received over MQTT: {index}", "⚠️"
+                )
+                return
+
+            if not persona_name:
+                from .persona_manager import persona_manager
+
+                persona_name = persona_manager.current_persona
+
+            project_root = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..")
+            )
+            sound_path = None
+            if persona_name and persona_name != "default":
+                persona_sound_path = os.path.join(
+                    project_root, "personas", persona_name, "wakeup", f"{index}.wav"
+                )
+                if os.path.exists(persona_sound_path):
+                    sound_path = persona_sound_path
+            elif persona_name == "default":
+                sound_path = os.path.join(
+                    project_root, "sounds", "wake-up", "custom", f"{index}.wav"
+                )
+
+            if not sound_path:
+                sound_path = os.path.join(
+                    project_root, "sounds", "wake-up", "custom", f"{index}.wav"
+                )
+
+            if not os.path.exists(sound_path):
+                logger.warning(
+                    f"Wakeup preview clip not found: persona={persona_name} index={index}",
+                    "⚠️",
+                )
+                return
+
+            from .audio import enqueue_wav_to_playback, ensure_playback_worker_started
+
+            ensure_playback_worker_started(CHUNK_MS)
+            enqueue_wav_to_playback(sound_path)
+            logger.info(
+                f"Queued wakeup preview via MQTT: persona={persona_name} index={index}",
+                "🔊",
+            )
+        except Exception as e:
+            logger.error(f"Failed to process MQTT wakeup preview: {e}")

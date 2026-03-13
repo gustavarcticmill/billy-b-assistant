@@ -19,6 +19,7 @@ from .config import (
     SILENCE_THRESHOLD,
     TEXT_ONLY_MODE,
     TURN_EAGERNESS,
+    is_conversation_state_enabled,
 )
 from .logger import logger
 from .movements import stop_all_motors
@@ -169,20 +170,55 @@ class BillySession:
         This method is a small convenience to avoid repeating the lock and
         json.dumps boilerplate across the codebase.
         """
-        async with self.ws_lock:
+        lock_acquired = False
+        try:
+            await asyncio.wait_for(self.ws_lock.acquire(), timeout=2.0)
+            lock_acquired = True
             if self.ws is not None:
                 await self.realtime_ai_provider.send_message(self.ws, payload)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Timed out acquiring ws_lock for send; dropping payload", "⚠️"
+            )
+        finally:
+            if lock_acquired:
+                self.ws_lock.release()
 
     async def _close_ws(self, timeout: float = 1.0):
-        async with self.ws_lock:
-            if not self.ws:
+        lock_acquired = False
+        ws_to_close = None
+        try:
+            await asyncio.wait_for(self.ws_lock.acquire(), timeout=2.0)
+            lock_acquired = True
+            ws_to_close = self.ws
+            if not ws_to_close:
                 return
-            try:
-                await self.ws.close()
-            except Exception as e:
-                logger.warning(f"Error closing websocket: {e}")
-            finally:
+        except asyncio.TimeoutError:
+            # Lock contention during shutdown should not wedge session teardown.
+            ws_to_close = self.ws
+            logger.warning(
+                "Timed out acquiring ws_lock during close; forcing websocket close without lock",
+                "⚠️",
+            )
+
+        if not ws_to_close:
+            return
+
+        try:
+            await asyncio.wait_for(ws_to_close.close(), timeout=max(0.5, timeout))
+        except asyncio.TimeoutError:
+            # Close timeout is common during teardown races; detach quietly.
+            logger.info("Websocket close timed out during shutdown; continuing.", "⏱️")
+        except websockets.exceptions.ConnectionClosed:
+            # Already closed by remote/local side.
+            pass
+        except Exception as e:
+            logger.warning(f"Error closing websocket ({type(e).__name__}): {e!r}", "⚠️")
+        finally:
+            if self.ws is ws_to_close:
                 self.ws = None
+            if lock_acquired:
+                self.ws_lock.release()
 
     # ---- Message type constants ----------------------------------------
     AUDIO_OUT_TYPES = {
@@ -347,13 +383,17 @@ class BillySession:
             )
             self.state._skip_post_response_once = False
 
-        error = data.get("status_details", {}).get("error")
+        response = data.get("response") or {}
+        status_details = response.get("status_details") or {}
+        error = status_details.get("error")
         if error:
-            error_type = error.get("type")
+            error_type = (error.get("type") or error.get("code") or "error").lower()
             error_message = error.get("message", "Unknown error")
             logger.error(f"OpenAI API Error [{error_type}]: {error_message}")
-        else:
-            logger.success("Assistant response complete.", "✿")
+            mapped_code = "noapikey" if "invalid_api_key" in error_type else "error"
+            await self.error_handler.play_error_sound(mapped_code, error_message)
+            return
+        logger.success("Assistant response complete.", "✿")
 
         if not TEXT_ONLY_MODE:
             await self.audio_handler.wait_for_playback_complete()
@@ -367,7 +407,11 @@ class BillySession:
 
         # Check if conversation_state was called - if not, log warning
         # (heuristic will be used in _post_response_handling)
-        if not self.state._saw_follow_up_call and self.state._turn_had_speech:
+        if (
+            is_conversation_state_enabled()
+            and not self.state._saw_follow_up_call
+            and self.state._turn_had_speech
+        ):
             logger.warning(
                 "⚠️ conversation_state was NOT called by the model - using heuristic fallback"
             )
@@ -390,7 +434,14 @@ class BillySession:
                     wants_follow_up = self.state.follow_up_expected or asked_question
                     if wants_follow_up:
                         print("🔁 Auto follow-up detected — opening mic.")
-                        await self.mic_manager.start_after_playback()
+                        opened = await self.mic_manager.start_after_playback()
+                        if not opened:
+                            logger.error(
+                                "Failed to reopen mic for kickoff follow-up. Ending session.",
+                                "❌",
+                            )
+                            await self.stop_session()
+                            return
                         self.last_activity[0] = time.time()
                     else:
                         print(
@@ -448,7 +499,15 @@ class BillySession:
             self.state.full_response_text = ""
             self.state._last_user_turn_meaningful = False
             self.last_activity[0] = time.time()
-            await self.mic_manager.start_after_playback()
+            opened = await self.mic_manager.start_after_playback()
+            if not opened:
+                logger.error(
+                    "Failed to reopen mic after tool-only turn. Ending session.",
+                    "❌",
+                )
+                self._set_idle_state()
+                stop_all_motors()
+                await self._close_ws()
             return
 
         # Determine if follow-up is expected
@@ -472,19 +531,29 @@ class BillySession:
             # If conversation_state was called, trust it
             # Otherwise fall back to heuristic (question mark detection)
             if self.state._saw_follow_up_call:
-                wants_follow_up = self.state.follow_up_expected
+                if last_user_turn_meaningful:
+                    wants_follow_up = self.state.follow_up_expected
+                else:
+                    if (
+                        self.state.follow_up_expected
+                        and self.state.follow_up_retry_count < FOLLOW_UP_RETRY_LIMIT
+                    ):
+                        wants_follow_up = True
+                        logger.info(
+                            "conversation_state requested follow-up on low-confidence user turn; allowing one grace retry.",
+                            "🔁",
+                        )
+                    else:
+                        wants_follow_up = False
+                    if self.state.follow_up_expected and not wants_follow_up:
+                        logger.info(
+                            "Ignoring conversation_state follow-up on empty/noisy user turn.",
+                            "🔇",
+                        )
             else:
                 wants_follow_up = asked_question
-                # Grace fallback: if the model forgot conversation_state, keep
-                # one listening window open so the user can still answer.
-                if not wants_follow_up and self.state.follow_up_retry_count == 0:
-                    wants_follow_up = True
-                    logger.info(
-                        "conversation_state missing; opening one grace follow-up window.",
-                        "🔁",
-                    )
 
-        if not self.state._saw_follow_up_call:
+        if is_conversation_state_enabled() and not self.state._saw_follow_up_call:
             logger.warning(
                 "conversation_state not called this turn; using heuristic instead."
             )
@@ -520,7 +589,17 @@ class BillySession:
             # Reset the flag after using it
             self.state._saw_follow_up_call = False
             self.state._last_user_turn_meaningful = False
-            await self.mic_manager.start_after_playback()
+            opened = await self.mic_manager.start_after_playback()
+            if not opened:
+                logger.error(
+                    "Failed to reopen mic for follow-up window. Ending session.",
+                    "❌",
+                )
+                self.state.follow_up_retry_count = 0
+                self._set_idle_state()
+                stop_all_motors()
+                await self._close_ws()
+                return
             self.state.full_response_text = ""
             self.last_activity[0] = time.time()
             return
@@ -569,13 +648,18 @@ class BillySession:
         async with self.ws_lock:
             if self.ws is None:
                 try:
+                    persona_voice = persona_manager.get_current_persona_voice()
+                    logger.info(
+                        f"Using persona '{persona_manager.current_persona}' voice '{persona_voice}' for session startup",
+                        "🎭",
+                    )
                     self.ws = await self.realtime_ai_provider.connect(
                         instructions=get_instructions_with_user_context(),
                         tools=get_tools_for_current_mode(),
                         server_vad_params=SERVER_VAD_PARAMS[TURN_EAGERNESS],
                         interrupt_response=False,
                         text_only_mode=TEXT_ONLY_MODE,
-                        voice=persona_manager.get_current_persona_voice(),
+                        voice=persona_voice,
                     )
 
                     # Kickoff message (from MQTT say)
@@ -583,13 +667,18 @@ class BillySession:
                         if self.kickoff_kind == "prompt":
                             kickoff_payload = self.kickoff_text
                         elif self.kickoff_kind == "literal":
+                            follow_up_clause = (
+                                "After you finish speaking, call `conversation_state` once. "
+                                "If the line is not a question and needs no reply, set expects_follow_up=false."
+                                if is_conversation_state_enabled()
+                                else "After you finish speaking, end naturally. Do not include internal tool-call text."
+                            )
                             kickoff_payload = (
                                 "Say the user's message **verbatim**, word for word, with no additions or reinterpretation.\n"
                                 "Maintain personality, but do NOT rephrase or expand.\n\n"
                                 f"Repeat this literal message sent via MQTT: {self.kickoff_text}"
                                 "\n\n"
-                                "After you finish speaking, call `conversation_state` once. "
-                                "If the line is not a question and needs no reply, set expects_follow_up=false."
+                                f"{follow_up_clause}"
                             )
                         else:
                             kickoff_payload = self.kickoff_text
@@ -806,4 +895,9 @@ class BillySession:
         self.state.assistant_speaking = False
         self.state._saw_follow_up_call = False
         self.last_activity[0] = time.time()
-        await self.mic_manager.start_after_playback(delay=0.2, retries=2)
+        opened = await self.mic_manager.start_after_playback(delay=0.2, retries=2)
+        if not opened:
+            logger.warning(
+                "Mic reopen failed after startup race fallback; session may need restart.",
+                "⚠️",
+            )

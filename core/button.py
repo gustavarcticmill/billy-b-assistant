@@ -159,7 +159,17 @@ def on_button():
                         logger.success("Session stopped.")
                     except TimeoutError:
                         logger.warning("Session stop timeout, forcing cleanup")
-                        future.cancel()
+                        with contextlib.suppress(Exception):
+                            force_stop_future = asyncio.run_coroutine_threadsafe(
+                                session_instance.request_stop(), session_instance.loop
+                            )
+                            force_stop_future.result(timeout=1.0)
+                        with contextlib.suppress(Exception):
+                            force_close_future = asyncio.run_coroutine_threadsafe(
+                                session_instance._close_ws(timeout=0.5),
+                                session_instance.loop,
+                            )
+                            force_close_future.result(timeout=2.0)
             except Exception as e:
                 logger.warning(f"Error stopping session ({type(e)}): {e}")
             finally:
@@ -225,11 +235,38 @@ def on_button():
             logger.warning("Previous session thread still running, waiting...", "⏳")
             session_thread.join(timeout=2.0)
             if session_thread.is_alive():
-                logger.error(
-                    "Previous session thread did not finish, aborting new session", "❌"
+                logger.warning(
+                    "Previous session thread did not finish, attempting forced stop",
+                    "⚠️",
                 )
-                _session_start_lock.release()
-                return
+                if session_instance and session_instance.loop:
+                    with contextlib.suppress(Exception):
+                        future = asyncio.run_coroutine_threadsafe(
+                            session_instance.request_stop(), session_instance.loop
+                        )
+                        future.result(timeout=1.0)
+                    with contextlib.suppress(Exception):
+                        future = asyncio.run_coroutine_threadsafe(
+                            session_instance._close_ws(timeout=0.5),
+                            session_instance.loop,
+                        )
+                        future.result(timeout=2.0)
+                session_thread.join(timeout=1.5)
+                if session_thread.is_alive():
+                    if not is_active:
+                        logger.warning(
+                            "Detaching stale inactive session thread and continuing",
+                            "🧹",
+                        )
+                        session_thread = None
+                        session_instance = None
+                    else:
+                        logger.error(
+                            "Previous session thread did not finish, aborting new session",
+                            "❌",
+                        )
+                        _session_start_lock.release()
+                        return
 
         audio.ensure_playback_worker_started(config.CHUNK_MS)
         # Clear the playback done event so session waits for wake-up sound

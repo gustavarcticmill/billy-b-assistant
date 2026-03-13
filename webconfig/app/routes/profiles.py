@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv, set_key
 from flask import Blueprint, jsonify, request, send_file
 
 
@@ -17,6 +18,13 @@ def get_profiles_dir():
         current_dir.parent.parent.parent
     )  # Go up 3 levels: routes -> app -> webconfig -> project root
     return project_root / "profiles"
+
+
+def _get_env_path() -> Path:
+    """Return absolute .env path in project root."""
+    current_dir = Path(__file__).parent
+    project_root = current_dir.parent.parent.parent
+    return project_root / ".env"
 
 
 profiles_bp = Blueprint('profiles', __name__)
@@ -144,12 +152,33 @@ def get_current_user():
     try:
         # Import here to avoid circular imports
         from core.config import DEFAULT_USER
+        from core.persona_manager import persona_manager
         from core.profile_manager import user_manager
+
+        env_path = _get_env_path()
+        load_dotenv(env_path, override=True)
+        current_user_env = os.getenv("CURRENT_USER", "").strip().strip("'\"")
 
         current_user = user_manager.get_current_user()
 
-        # If no current user but we have a default user, try to load it
-        if not current_user and DEFAULT_USER and DEFAULT_USER.lower() != "guest":
+        # Prefer CURRENT_USER from .env when set
+        if (
+            not current_user
+            and current_user_env
+            and current_user_env.lower() != "guest"
+        ):
+            try:
+                current_user = user_manager.identify_user(current_user_env, "high")
+            except Exception as e:
+                print(f"Failed to load current user {current_user_env}: {e}")
+
+        # Only fallback to DEFAULT_USER when CURRENT_USER is empty
+        if (
+            not current_user
+            and not current_user_env
+            and DEFAULT_USER
+            and DEFAULT_USER.lower() != "guest"
+        ):
             try:
                 current_user = user_manager.identify_user(DEFAULT_USER, "high")
             except Exception as e:
@@ -157,6 +186,12 @@ def get_current_user():
 
         if not current_user:
             return jsonify({"user": None})
+
+        # Keep persona manager aligned with loaded user's preference.
+        preferred_persona = current_user.data.get("USER_INFO", {}).get(
+            "preferred_persona", "default"
+        )
+        persona_manager.switch_persona(preferred_persona)
 
         return jsonify({
             "user": {
@@ -181,12 +216,25 @@ def set_current_user():
             return jsonify({"error": "User name is required"}), 400
 
         # Import here to avoid circular imports
+        from core.persona_manager import persona_manager
         from core.profile_manager import user_manager
 
         # Identify the user (this will load or create the profile)
         profile = user_manager.identify_user(user_name, "high")
 
         if profile:
+            # Persist CURRENT_USER for other processes (main Billy service).
+            env_path = _get_env_path()
+            set_key(
+                str(env_path), "CURRENT_USER", profile.name.lower(), quote_mode="never"
+            )
+
+            # Switch persona manager to this profile's preferred persona.
+            preferred_persona = profile.data.get("USER_INFO", {}).get(
+                "preferred_persona", "default"
+            )
+            persona_manager.switch_persona(preferred_persona)
+
             return jsonify({
                 "message": f"Switched to user: {user_name}",
                 "user": {"name": profile.name, "data": profile.data},
@@ -205,6 +253,8 @@ def clear_current_user():
         from core.profile_manager import user_manager
 
         user_manager.clear_current_user()
+        env_path = _get_env_path()
+        set_key(str(env_path), "CURRENT_USER", "guest", quote_mode="never")
         return jsonify({"message": "Current user cleared, switched to guest mode"})
 
     except Exception as e:

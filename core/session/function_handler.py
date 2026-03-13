@@ -5,7 +5,7 @@ import json
 import time
 from typing import Any
 
-from ..config import PERSONALITY
+from ..config import PERSONALITY, TEXT_ONLY_MODE
 from ..ha import send_conversation_prompt
 from ..logger import logger
 from ..news_digest import get_news_digest
@@ -378,13 +378,26 @@ class FunctionHandler:
         try:
             from ..session_manager import get_instructions_with_user_context
 
-            await self.session._ws_send_json({
+            session_voice = persona_manager.get_current_persona_voice()
+            session_update = {
                 "type": "session.update",
                 "session": {
                     "type": "realtime",
                     "instructions": get_instructions_with_user_context(),
                 },
-            })
-            logger.info("Updated session with user context", "👤")
+            }
+
+            if not TEXT_ONLY_MODE:
+                session_update["session"]["audio"] = {
+                    "output": {
+                        "voice": session_voice,
+                    }
+                }
+
+            await self.session._ws_send_json(session_update)
+            logger.info(
+                f"Updated session with user context (persona={persona_manager.current_persona}, voice={session_voice})",
+                "👤",
+            )
         except Exception as e:
             logger.warning(f"Failed to update session with user context: {e}")

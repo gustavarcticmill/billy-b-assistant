@@ -30,6 +30,8 @@ class MicManagerWrapper:
             return
 
         try:
+            self._mic_data_started = False
+            self._logged_waiting_for_wakeup = False
             if self.mic is None:
                 self.mic = MicManager()
 
@@ -70,12 +72,20 @@ class MicManagerWrapper:
                     await asyncio.sleep(wait_time)
 
                 if self.mic_running:
-                    self.mic.stop()
+                    await asyncio.wait_for(
+                        asyncio.to_thread(self.mic.stop), timeout=1.5
+                    )
                     self.mic_running = False
                     await asyncio.sleep(0.2)
 
                 if not self.mic_running:
-                    self.mic.start(self.callback)
+                    self._mic_data_started = False
+                    self._logged_waiting_for_wakeup = False
+                    # Run stream open on a worker thread with timeout so audio-driver
+                    # stalls cannot wedge the session loop.
+                    await asyncio.wait_for(
+                        asyncio.to_thread(self.mic.start, self.callback), timeout=2.5
+                    )
                     self.mic_running = True
                     self._mic_guard_until = time.time() + 0.35
                     if not self.mic_timeout_task or self.mic_timeout_task.done():
@@ -86,9 +96,19 @@ class MicManagerWrapper:
                 print(f"🎙️ Mic opened (attempt {attempt}).")
                 return True
             except Exception as e:
-                logger.warning(f"Mic open failed (attempt {attempt}/{retries}): {e}")
-                if "Device unavailable" in str(e) and attempt < retries:
-                    await self._reset_audio_system()
+                err = str(e)
+                logger.warning(f"Mic open failed (attempt {attempt}/{retries}): {err}")
+                self.mic_running = False
+                # Ensure we get a fresh stream object on retry.
+                self.mic = MicManager()
+                # Fail fast for ALSA unavailability in follow-up reopen path.
+                # Repeated retries + reset attempts can stall the session loop.
+                if "Device unavailable" in err or "PaErrorCode -9985" in err:
+                    logger.error(
+                        "Mic device unavailable during follow-up reopen; skipping reset/retries.",
+                        "🛑",
+                    )
+                    return False
 
         logger.error("Mic failed to open after retries.")
         return False

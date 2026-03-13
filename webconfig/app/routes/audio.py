@@ -7,6 +7,7 @@ import re
 import subprocess
 
 import numpy as np
+import paho.mqtt.client as mqtt
 import sounddevice as sd
 from flask import Blueprint, Response, jsonify, request, send_from_directory
 
@@ -185,6 +186,32 @@ def play_wakeup_clip():
 
         if not os.path.exists(sound_path):
             return jsonify({"error": f"Clip {index}.wav not found"}), 404
+
+        # Prefer sending preview request to the running Billy service process.
+        # That process owns GPIO, so mouth movement works reliably.
+        mqtt_host = (core_config.MQTT_HOST or "").strip()
+        mqtt_user = (core_config.MQTT_USERNAME or "").strip()
+        mqtt_pass = (core_config.MQTT_PASSWORD or "").strip()
+        mqtt_port = int(core_config.MQTT_PORT or 1883)
+        if mqtt_host and mqtt_user and mqtt_pass:
+            try:
+                client = mqtt.Client()
+                client.username_pw_set(mqtt_user, mqtt_pass)
+                client.connect(mqtt_host, mqtt_port, 5)
+                payload = json.dumps({
+                    "index": index,
+                    "persona": persona_name,
+                })
+                result = client.publish("billy/wakeup/play", payload, retain=False)
+                client.disconnect()
+                if result.rc == mqtt.MQTT_ERR_SUCCESS:
+                    return jsonify({
+                        "status": f"Queued clip {index}.wav via MQTT for Billy service playback"
+                    })
+            except Exception:
+                pass
+
+        # Fallback: plain local playback without touching Billy GPIO ownership.
         card_index = get_usb_pcm_card_index()
         device = alsa_play_device(card_index)
         subprocess.Popen(["aplay", "-q", "-D", device, sound_path])

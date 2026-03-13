@@ -4,7 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [2.1.0] — 2026-03-13
+## [2.1.1] — 2026-03-14
+
+### Added
+- **Wake-up Preview MQTT Bridge**: Added `billy/wakeup/play` MQTT topic handling so wake-up clip previews can be played by the running `billy.service` process (the GPIO owner), enabling mouth movement during preview from the Web UI.
+- **Billy Berserk Persona Preset**: Added a new `billy-berserk` persona preset with an aggressive chaotic style.
+
+### Changed
+- **Wake-up Preview Routing**: Updated Web UI wake-up preview flow to prefer MQTT playback via `billy.service`, with `aplay` fallback in webconfig. This avoids importing core audio/movement modules in webconfig and prevents GPIO ownership conflicts.
+- **User/Profile Switching (Web UI Backend)**: Updated `/current-user` routes to use and persist `CURRENT_USER` in `.env`, and to align `persona_manager` with the selected profile's `preferred_persona`.
+- **Session Shutdown Resilience**: Improved stuck-session cleanup paths (button + MQTT stop/start flows) with stronger timeout handling and forced close fallbacks to reduce stale session thread lockups.
+
+### Fixed
+- **Persona Voice Persistence**: Fixed multiple realtime session update paths that changed instructions but not audio voice, causing voice to remain at `ballad` despite persona changes.
+- **Persona Switch Consistency**: Fixed profile/persona switch path where voice-change handling could return early before fully applying the new persona state.
+- **Session Startup Voice Selection**: Added safer persona voice resolution and startup logging to verify which persona voice is sent at connect time.
+- **Web UI Profile Loading**: Fixed cases where switching users from the UI would still load fallback/default profile behavior instead of the selected user's stored persona context.
+
+---
+
+## [2.1.0] — 2026-03-12
 
 ### Added
 - **OpenAI Realtime Model Support**: Added support for selecting `gpt-realtime-1.5` in the Web UI and `.env` configuration.
