@@ -88,6 +88,9 @@ def get_tools_for_current_mode():
 
 
 class BillySession:
+    # SRES-02: Dead websocket detection threshold
+    _DEAD_WS_THRESHOLD = 3
+
     def __init__(
         self,
         interrupt_event=None,
@@ -114,6 +117,9 @@ class BillySession:
         self.run_mode = RUN_MODE
         self._stopping = False
         self._interaction_count_recorded = False
+
+        # SRES-02: Dead websocket detection
+        self._consecutive_send_timeouts = 0
 
         # Kickoff (MQTT say)
         self.kickoff_text = (kickoff_text or "").strip() or None
@@ -176,10 +182,25 @@ class BillySession:
             lock_acquired = True
             if self.ws is not None:
                 await self.realtime_ai_provider.send_message(self.ws, payload)
+                self._consecutive_send_timeouts = 0  # SRES-02: reset on success
         except asyncio.TimeoutError:
+            self._consecutive_send_timeouts += 1  # SRES-02: track
             logger.warning(
-                "Timed out acquiring ws_lock for send; dropping payload", "⚠️"
+                f"Timed out acquiring ws_lock for send; dropping payload "
+                f"(consecutive: {self._consecutive_send_timeouts}"
+                f"/{self._DEAD_WS_THRESHOLD})",
+                "⚠️",
             )
+            if (
+                self._consecutive_send_timeouts >= self._DEAD_WS_THRESHOLD
+            ):
+                logger.error(
+                    f"Dead websocket detected after "
+                    f"{self._consecutive_send_timeouts} consecutive "
+                    f"send timeouts. Tearing down session.",
+                )
+                # Schedule teardown without awaiting (avoid deadlock in send path)
+                asyncio.create_task(self.stop_session())
         finally:
             if lock_acquired:
                 self.ws_lock.release()
@@ -633,6 +654,7 @@ class BillySession:
         self.last_activity[0] = time.time()
         self.session_active.set()
         self._stopping = False
+        self._consecutive_send_timeouts = 0  # SRES-02: reset on session start
         self._interaction_count_recorded = False
         self._local_vad_active = False
         self._local_vad_hold_until = 0.0

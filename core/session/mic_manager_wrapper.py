@@ -198,8 +198,17 @@ class MicManagerWrapper:
                     last_tail_move = now
 
                 if elapsed > MIC_TIMEOUT_SECONDS:
+                    # SRES-03: Prevent double-stop if session already stopping
+                    if self.session._stopping:
+                        logger.info(
+                            "Mic timeout reached but session already stopping;"
+                            " skipping duplicate stop.",
+                            "ℹ️",
+                        )
+                        break
                     logger.info(
-                        f"No mic activity for {MIC_TIMEOUT_SECONDS}s. Ending input...",
+                        f"No mic activity for {MIC_TIMEOUT_SECONDS}s."
+                        " Ending input...",
                         "⏱️",
                     )
                     await self.session.stop_session()
