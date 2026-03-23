@@ -12,7 +12,7 @@ The fish responds to voice — both button press and hands-free wake word activa
 
 ### Validated
 
-These capabilities exist in the current codebase and work (pre-wake-word):
+These capabilities exist in the current codebase and work:
 
 - Session management with real-time AI conversation via OpenAI Realtime API / xAI provider
 - Hardware button press triggers conversation sessions with debounce
@@ -26,16 +26,19 @@ These capabilities exist in the current codebase and work (pre-wake-word):
 - News digest, weather, and web search tool capabilities
 - Audio settings panel with mic check, gain control, speaker test
 - Mock hardware support for development without GPIO
+- Wake word detection reintegration via core/trigger.py abstraction (Validated in Phase 1: Core Integration)
+- Trigger abstraction: trigger_session_start/stop with multi-source support (Validated in Phase 1: Core Integration)
+- Config validation with range-checked helpers for numeric env vars (Validated in Phase 1: Core Integration)
+- Session resilience: playback deadlock fix, dead websocket detection, double-stop prevention (Validated in Phase 1: Core Integration)
+- HA resilience: 5s timeout, 30s availability caching (Validated in Phase 1: Core Integration)
+- MQTT delegation to trigger module (merge breakage fix) (Validated in Phase 1: Core Integration)
 
 ### Active
 
-- [ ] Wake word detection reintegration (Porcupine-based, with RMS fallback)
-- [ ] Wake word trigger integration in button.py (trigger_session_start/stop abstraction)
 - [ ] Wake word web routes blueprint (status, events, runtime config, test, calibration)
 - [ ] Wake word UI panel (enable/disable, calibration wizard, event stream, status badge)
 - [ ] Settings form integration for wake word config persistence to .env
-- [ ] Investigate and fix other breakages from upstream merge
-- [ ] End-to-end verification: button press + wake word both trigger sessions correctly
+- [ ] End-to-end hardware verification: button press + wake word both trigger sessions on Pi
 
 ### Out of Scope
 
@@ -93,4 +96,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-24 after initialization*
+*Last updated: 2026-03-23 after Phase 1 completion*
