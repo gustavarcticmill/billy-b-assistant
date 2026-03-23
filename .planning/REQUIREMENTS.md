@@ -21,13 +21,13 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Wake Word Web Routes
 
-- [ ] **WWEB-01**: `GET /wake-word/status` returns JSON with wake word controller status (or fallback if unavailable)
-- [ ] **WWEB-02**: `GET /wake-word/events` drains and returns up to 50 events from the controller event queue
-- [ ] **WWEB-03**: `POST /wake-word/runtime-config` accepts enabled, sensitivity, threshold, endpoint, access key and updates controller
-- [ ] **WWEB-04**: `POST /wake-word/test` accepts simulate/stop actions, calls trigger_session_start/stop("ui-test")
-- [ ] **WWEB-05**: `POST /wake-word/calibrate` records audio via sounddevice, computes RMS metrics for ambient and phrase modes
-- [ ] **WWEB-06**: `POST /wake-word/calibrate/apply` persists threshold/sensitivity to .env and updates runtime config
-- [ ] **WWEB-07**: Wake word blueprint registered in Flask app factory following existing blueprint pattern
+- [x] **WWEB-01**: `GET /wake-word/status` returns JSON with wake word controller status (or fallback if unavailable)
+- [x] **WWEB-02**: `GET /wake-word/events` drains and returns up to 50 events from the controller event queue
+- [x] **WWEB-03**: `POST /wake-word/runtime-config` accepts enabled, sensitivity, threshold, endpoint, access key and updates controller
+- [x] **WWEB-04**: `POST /wake-word/test` accepts simulate/stop actions, calls trigger_session_start/stop("ui-test")
+- [x] **WWEB-05**: `POST /wake-word/calibrate` records audio via sounddevice, computes RMS metrics for ambient and phrase modes
+- [x] **WWEB-06**: `POST /wake-word/calibrate/apply` persists threshold/sensitivity to .env and updates runtime config
+- [x] **WWEB-07**: Wake word blueprint registered in Flask app factory following existing blueprint pattern
 
 ### Wake Word UI
 
@@ -44,8 +44,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Settings Persistence
 
-- [ ] **SETS-01**: Wake word config keys (WAKE_WORD_ENABLED, SENSITIVITY, THRESHOLD, ENDPOINT, PORCUPINE_ACCESS_KEY) saved to .env on form submit
-- [ ] **SETS-02**: Wake word keys added to CONFIG_KEYS in system routes so main settings save includes them
+- [x] **SETS-01**: Wake word config keys (WAKE_WORD_ENABLED, SENSITIVITY, THRESHOLD, ENDPOINT, PORCUPINE_ACCESS_KEY) saved to .env on form submit
+- [x] **SETS-02**: Wake word keys added to CONFIG_KEYS in system routes so main settings save includes them
 
 ### Session Resilience
 
@@ -119,15 +119,15 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | CONF-01 | Phase 1 | Complete |
 | CONF-02 | Phase 1 | Complete |
 | FIX-01 | Phase 1 | Complete |
-| WWEB-01 | Phase 2 | Pending |
-| WWEB-02 | Phase 2 | Pending |
-| WWEB-03 | Phase 2 | Pending |
-| WWEB-04 | Phase 2 | Pending |
-| WWEB-05 | Phase 2 | Pending |
-| WWEB-06 | Phase 2 | Pending |
-| WWEB-07 | Phase 2 | Pending |
-| SETS-01 | Phase 2 | Pending |
-| SETS-02 | Phase 2 | Pending |
+| WWEB-01 | Phase 2 | Complete |
+| WWEB-02 | Phase 2 | Complete |
+| WWEB-03 | Phase 2 | Complete |
+| WWEB-04 | Phase 2 | Complete |
+| WWEB-05 | Phase 2 | Complete |
+| WWEB-06 | Phase 2 | Complete |
+| WWEB-07 | Phase 2 | Complete |
+| SETS-01 | Phase 2 | Complete |
+| SETS-02 | Phase 2 | Complete |
 | WWUI-01 | Phase 3 | Pending |
 | WWUI-02 | Phase 3 | Pending |
 | WWUI-03 | Phase 3 | Pending |
