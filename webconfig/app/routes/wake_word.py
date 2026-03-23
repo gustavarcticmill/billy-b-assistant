@@ -73,9 +73,7 @@ def runtime_config():
         if "endpoint" in data:
             params["endpoint"] = str(data["endpoint"])
         if "porcupine_access_key" in data:
-            params["porcupine_access_key"] = str(
-                data["porcupine_access_key"]
-            )
+            params["porcupine_access_key"] = str(data["porcupine_access_key"])
         controller.set_parameters(**params)
         return jsonify({"status": "ok", "applied": list(params.keys())})
     except Exception as e:
@@ -93,11 +91,10 @@ def test():
         if action == "simulate":
             trigger_session_start("ui_test")
             return jsonify({"status": "ok", "action": "simulate"})
-        elif action == "stop":
+        if action == "stop":
             trigger_session_stop("ui_test")
             return jsonify({"status": "ok", "action": "stop"})
-        else:
-            return jsonify({"error": f"Unknown action: {action}"}), 400
+        return jsonify({"error": f"Unknown action: {action}"}), 400
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -130,9 +127,7 @@ def calibrate():
             rms_mean = float(np.mean(rms_values))
             rms_peak = float(np.max(rms_values))
             # For ambient mode: suggest threshold 50% above peak noise
-            suggested_threshold = (
-                round(rms_peak * 1.5) if mode == "ambient" else None
-            )
+            suggested_threshold = round(rms_peak * 1.5) if mode == "ambient" else None
 
             result = {
                 "mode": mode,
@@ -157,8 +152,9 @@ def calibrate_apply():
     """Persist calibration values to .env and update runtime controller."""
     data = request.get_json() or {}
     try:
-        from core.hotword import controller
         from dotenv import set_key
+
+        from core.hotword import controller
 
         from .system import ENV_PATH
 
