@@ -276,135 +276,31 @@ def _run_async(coro):
     threading.Thread(target=_runner, daemon=True).start()
 
 
-# Helper functions for toggle listening
+# Helper functions for toggle listening -- delegate to trigger module
 def mqtt_toggle_listening():
-    from . import button as button_mod
+    from . import trigger
 
-    if button_mod.is_active:
+    if trigger.is_active:
         mqtt_stop_listening()
     else:
         mqtt_start_listening()
 
 
 def mqtt_start_listening():
-    import contextlib
-    import time
+    """Start a listening session via MQTT command, delegating to trigger module."""
+    from . import trigger
 
-    from . import button as button_mod
-
-    if button_mod.is_active:
-        return
-
-    if not button_mod._session_start_lock.acquire(blocking=False):
-        logger.warning("Session start already in progress, ignoring MQTT start", "⚠️")
-        return
-
-    try:
-        if button_mod.session_thread and button_mod.session_thread.is_alive():
-            button_mod.session_thread.join(timeout=2.0)
-            if button_mod.session_thread.is_alive():
-                logger.warning(
-                    "Previous session thread did not finish, attempting forced stop",
-                    "⚠️",
-                )
-                if button_mod.session_instance and button_mod.session_instance.loop:
-                    with contextlib.suppress(Exception):
-                        future = asyncio.run_coroutine_threadsafe(
-                            button_mod.session_instance.request_stop(),
-                            button_mod.session_instance.loop,
-                        )
-                        future.result(timeout=1.0)
-                    with contextlib.suppress(Exception):
-                        future = asyncio.run_coroutine_threadsafe(
-                            button_mod.session_instance._close_ws(timeout=0.5),
-                            button_mod.session_instance.loop,
-                        )
-                        future.result(timeout=2.0)
-                button_mod.session_thread.join(timeout=1.5)
-                if button_mod.session_thread.is_alive():
-                    if not button_mod.is_active:
-                        logger.warning(
-                            "Detaching stale inactive session thread and continuing",
-                            "🧹",
-                        )
-                        button_mod.session_thread = None
-                        button_mod.session_instance = None
-                    else:
-                        logger.error(
-                            "Previous session thread did not finish, aborting new session",
-                            "❌",
-                        )
-                        button_mod._session_start_lock.release()
-                        return
-
-        button_mod.audio.ensure_playback_worker_started(button_mod.config.CHUNK_MS)
-        button_mod.audio.playback_done_event.clear()
-        threading.Thread(
-            target=button_mod.audio.play_random_wake_up_clip, daemon=True
-        ).start()
-
-        button_mod.is_active = True
-        button_mod.interrupt_event = threading.Event()
-
-        def run_session():
-            try:
-                button_mod.move_head("on")
-                button_mod.session_instance = button_mod.BillySession(
-                    interrupt_event=button_mod.interrupt_event
-                )
-                button_mod.session_instance.last_activity[0] = time.time()
-                asyncio.run(button_mod.session_instance.start())
-            finally:
-                button_mod.move_head("off")
-                button_mod.is_active = False
-                button_mod.session_instance = None
-                with contextlib.suppress(Exception):
-                    button_mod._session_start_lock.release()
-
-        button_mod.session_thread = threading.Thread(target=run_session, daemon=True)
-        button_mod.session_thread.start()
-    except Exception:
-        with contextlib.suppress(Exception):
-            button_mod._session_start_lock.release()
-        raise
+    trigger.trigger_session_start("mqtt")
 
 
 def mqtt_stop_listening():
-    import contextlib
-    from concurrent.futures import CancelledError
+    """Stop an active listening session via MQTT command, delegating to trigger module."""
+    from . import trigger
 
-    from . import button as button_mod
-
-    if not button_mod.is_active:
+    if not trigger.is_active:
         return
 
-    button_mod.interrupt_event.set()
-    button_mod.audio.stop_playback()
-
-    if button_mod.session_instance:
-        with contextlib.suppress(CancelledError):
-            future = asyncio.run_coroutine_threadsafe(
-                button_mod.session_instance.stop_session(),
-                button_mod.session_instance.loop,
-            )
-            try:
-                future.result(timeout=5.0)
-            except TimeoutError:
-                logger.warning("MQTT stop timeout, forcing cleanup", "⚠️")
-                with contextlib.suppress(Exception):
-                    force_stop_future = asyncio.run_coroutine_threadsafe(
-                        button_mod.session_instance.request_stop(),
-                        button_mod.session_instance.loop,
-                    )
-                    force_stop_future.result(timeout=1.0)
-                with contextlib.suppress(Exception):
-                    force_close_future = asyncio.run_coroutine_threadsafe(
-                        button_mod.session_instance._close_ws(timeout=0.5),
-                        button_mod.session_instance.loop,
-                    )
-                    force_close_future.result(timeout=2.0)
-
-    button_mod.is_active = False
+    trigger.trigger_session_stop("mqtt")
 
 
 # -----------------------------------------------------------------------
