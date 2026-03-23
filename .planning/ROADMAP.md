@@ -28,7 +28,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. When a session ends, wake word listening resumes without mic resource errors or self-triggering on Billy's own voice
   4. Invalid or out-of-range config values log a warning and fall back to defaults at startup rather than silently misbehaving
   5. Any merge-introduced breakages discovered during integration are catalogued and fixed
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Config validation: range-checked helpers for numeric env vars (CONF-01, CONF-02)
+- [ ] 01-02-PLAN.md — Resilience fixes: playback deadlock, dead websocket, double-stop, HA timeout/cache (SRES-01..03, HARE-01..02)
+- [ ] 01-03-PLAN.md — Trigger abstraction and wake word wiring: core/trigger.py, button.py refactor, start_loop init (WAKE-01..09, FIX-01)
 
 ### Phase 2: Web Routes & Settings
 **Goal**: The wake word controller is fully accessible via HTTP — status queryable, events streamable, configuration changeable at runtime, calibration recordable, and settings persistable across reboots
@@ -50,7 +55,7 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. The wake word panel shows a live status badge (Listening / Disabled / Paused / Error) that updates without page refresh
   2. Toggling the enable/disable switch takes effect immediately and the status badge reflects the change
   3. The event log shows the last 50 detection events in a scrollable panel, updating in real time
-  4. Completing the calibration wizard (Measure Background → Record Wake Phrase → Apply Suggestions) produces a threshold recommendation and persists it to .env with one click
+  4. Completing the calibration wizard (Measure Background -> Record Wake Phrase -> Apply Suggestions) produces a threshold recommendation and persists it to .env with one click
   5. The panel is visually consistent with Audio Settings, MQTT, and Home Assistant sections and collapses cleanly
 **Plans**: TBD
 **UI hint**: yes
@@ -58,10 +63,10 @@ Decimal phases appear between their surrounding integers in numeric order.
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3
+Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Core Integration | 0/TBD | Not started | - |
+| 1. Core Integration | 0/3 | Planning complete | - |
 | 2. Web Routes & Settings | 0/TBD | Not started | - |
 | 3. UI Panel | 0/TBD | Not started | - |
