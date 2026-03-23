@@ -4,8 +4,8 @@ import os
 
 from dotenv import load_dotenv
 
-from .personality import (
-    PersonalityProfile,
+from .persona import (
+    PersonaProfile,
     load_traits_from_ini,
 )
 
@@ -36,25 +36,66 @@ load_dotenv(dotenv_path=ENV_PATH)
 traits = load_traits_from_ini(PERSONA_PATH)
 
 # === Build Personality ===
-PERSONALITY = PersonalityProfile(**traits)
+PERSONALITY = PersonaProfile(**traits)
 
 _config = configparser.ConfigParser()
 _config.read(PERSONA_PATH)
 
 # === Instructions for GPT ===
 TOOL_INSTRUCTIONS = """
-You also have special powers:
-- If someone asks if you like fishsticks you always answer Yes. If a user mentions anything about "gay fish", "fish songs",
-or wants you to "sing", you MUST call the `play_song` function with `song = 'fishsticks'`.
-- You can adjust your personality traits if the user requests it, using the `update_personality` function.
-- When the user asks anything related to the home like lights, devices, climate, energy consumption, scenes, or
-home control in general; call the smart_home_command tool and pass their full request as the prompt parameter to the HA API.
-You will get a response back from Home Assistant itself so you have to interpret and explain it to the end user.
+=== CRITICAL: EVERY RESPONSE MUST END WITH conversation_state ===
+AFTER you speak, ALWAYS call conversation_state(expects_follow_up=true/false).
+Set expects_follow_up=true if you asked a question, false otherwise.
+NEVER skip this - the system breaks without it.
+NEVER speak or print tool calls out loud. Do NOT include text like
+"conversation_state(...)" in spoken output. Tool calls are internal only.
 
-You are allowed to call tools mid-conversation to trigger special behaviors.
+=== TOOLS ===
 
-DO NOT explain or confirm that you are triggering a tool. When a tool is triggered, incorporate its result into your response as if it were your own knowledge or action, without explaining the mechanism.
-"""
+PERSONALITY: Use update_personality when users request changes (e.g., "be funnier" -> update_personality({"humor": 80}))
+
+SMART HOME: Only call smart_home_command for DIRECT commands ("turn on lights"). If asked to "ask if" or "check if", just speak the question.
+NEWS: Use get_news_digest for headlines, weather, and sports updates. Team/location are OPTIONAL inputs. If missing, call the tool anyway with available context and configured sources first; only ask a follow-up if the tool response still lacks enough information. IMPORTANT: for headlines, always set a concise `subject` based on user intent (use keyword-style labels like "technology", "sports", "project updates", "weather", "finance") so source keywords are used during source selection. Also set `query` when user asks about a specific topic/person/event. BEFORE calling the news tool, acknowledge VERY briefly (max 2 words), preferably exactly: "Checking."
+
+USER SYSTEM:
+- identify_user: Call when someone introduces themselves ("I am Tom")
+- store_memory: Store lasting facts users voluntarily share (NOT answers to your questions)
+- manage_profile/switch_persona: Change personas
+
+SONGS: Use play_song for special songs
+
+=== RESPONSE FLOW ===
+1. [Optional: call tool functions]
+2. Generate speech (ALWAYS speak - never respond with only function calls)
+3. Call conversation_state (MANDATORY - NEVER skip this)
+
+EXAMPLES:
+✓ User: "Hello" -> Speak "Hey!" -> [internal tool call: conversation_state(expects_follow_up=false)]
+✓ User: "What's up?" -> Speak "Not much, you?" -> [internal tool call: conversation_state(expects_follow_up=true)]
+✗ User: "Hello" -> Speak "Hey! conversation_state(expects_follow_up=false)" (WRONG: tool call spoken)
+✗ User: "Hello" -> Speak "Hey!" -> NO conversation_state (SYSTEM BREAKS)
+""".strip()
+
+TOOL_INSTRUCTIONS_NO_CONVERSATION_STATE = """
+=== TOOLS ===
+
+PERSONALITY: Use update_personality when users request changes (e.g., "be funnier" -> update_personality({"humor": 80}))
+
+SMART HOME: Only call smart_home_command for DIRECT commands ("turn on lights"). If asked to "ask if" or "check if", just speak the question.
+NEWS: Use get_news_digest for headlines, weather, and sports updates. Team/location are OPTIONAL inputs. If missing, call the tool anyway with available context and configured sources first; only ask a follow-up if the tool response still lacks enough information. IMPORTANT: for headlines, always set a concise `subject` based on user intent (use keyword-style labels like "technology", "sports", "project updates", "weather", "finance") so source keywords are used during source selection. Also set `query` when user asks about a specific topic/person/event. BEFORE calling the news tool, acknowledge VERY briefly (max 2 words), preferably exactly: "Checking."
+
+USER SYSTEM:
+- identify_user: Call when someone introduces themselves ("I am Tom")
+- store_memory: Store lasting facts users voluntarily share (NOT answers to your questions)
+- manage_profile/switch_persona: Change personas
+
+SONGS: Use play_song for special songs
+
+=== RESPONSE FLOW ===
+1. [Optional: call tool functions]
+2. Generate speech (ALWAYS speak - never respond with only function calls)
+3. End naturally. Do NOT speak or print internal tool-call text.
+""".strip()
 
 CUSTOM_INSTRUCTIONS = _config.get("META", "instructions")
 if _config.has_section("BACKSTORY"):
@@ -87,10 +128,34 @@ Use your backstory to inspire jokes, metaphors, or occasional references in conv
 
 # === OpenAI Config ===
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini-realtime-preview")
-VOICE = os.getenv("VOICE", "ash")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-realtime-mini")
+CONVERSATION_STATE_ENABLED_MODELS = {"gpt-realtime", "gpt-realtime-1.5"}
+
+
+def is_conversation_state_enabled(model: str | None = None) -> bool:
+    """Whether conversation_state tool/instructions should be enabled."""
+    m = (model or os.getenv("OPENAI_MODEL", OPENAI_MODEL) or "").strip()
+    return m in CONVERSATION_STATE_ENABLED_MODELS
+
+
+def get_tool_instructions(model: str | None = None) -> str:
+    """Return tool instructions appropriate for the selected model."""
+    return (
+        TOOL_INSTRUCTIONS
+        if is_conversation_state_enabled(model)
+        else TOOL_INSTRUCTIONS_NO_CONVERSATION_STATE
+    )
+
+
+# === XAI Config ===
+XAI_API_KEY = os.getenv("XAI_API_KEY", "")
+
+# === Provider Config ===
+REALTIME_AI_PROVIDER = os.getenv("REALTIME_AI_PROVIDER", None)
 
 # === Modes ===
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+# Legacy DEBUG_MODE for backward compatibility
 DEBUG_MODE = os.getenv("DEBUG_MODE", "true").lower() == "true"
 DEBUG_MODE_INCLUDE_DELTA = (
     os.getenv("DEBUG_MODE_INCLUDE_DELTA", "false").lower() == "true"
@@ -100,14 +165,42 @@ RUN_MODE = os.getenv("RUN_MODE", "normal").lower()
 
 # === Billy Hardware ===
 BILLY_MODEL = os.getenv("BILLY_MODEL", "modern").strip().lower()
+BILLY_PINS = os.getenv("BILLY_PINS", "new").strip().lower()
 
 # === Audio Config ===
 SPEAKER_PREFERENCE = os.getenv("SPEAKER_PREFERENCE")
 MIC_PREFERENCE = os.getenv("MIC_PREFERENCE")
 MIC_TIMEOUT_SECONDS = int(os.getenv("MIC_TIMEOUT_SECONDS", "5"))
-SILENCE_THRESHOLD = int(os.getenv("SILENCE_THRESHOLD", "2000"))
-CHUNK_MS = int(os.getenv("CHUNK_MS", "50"))
+SILENCE_THRESHOLD = float(os.getenv("SILENCE_THRESHOLD", "1000"))
+CHUNK_MS = int(os.getenv("CHUNK_MS", "40"))
+FOLLOW_UP_RETRY_LIMIT = int(os.getenv("FOLLOW_UP_RETRY_LIMIT", "1"))
 PLAYBACK_VOLUME = 1
+MOUTH_ARTICULATION = int(os.getenv("MOUTH_ARTICULATION", "5"))
+TURN_EAGERNESS = os.getenv("TURN_EAGERNESS", "high").strip().lower()
+HEAD_RETRACT_DELAY_SECONDS = float(os.getenv("HEAD_RETRACT_DELAY_SECONDS", "1.5"))
+if TURN_EAGERNESS not in {"low", "medium", "high"}:
+    TURN_EAGERNESS = "medium"
+
+# Server VAD parameters based on eagerness
+# Lower silence_duration_ms = faster turn detection (more eager)
+# Higher threshold = less sensitive to noise (more conservative)
+SERVER_VAD_PARAMS = {
+    "low": {
+        "threshold": 0.9,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 1500,
+    },
+    "medium": {
+        "threshold": 0.9,
+        "prefix_padding_ms": 300,
+        "silence_duration_ms": 1000,
+    },
+    "high": {
+        "threshold": 0.7,
+        "prefix_padding_ms": 150,
+        "silence_duration_ms": 250,
+    },
+}
 
 # === Wake Word Config ===
 WAKE_WORD_ENABLED = os.getenv("WAKE_WORD_ENABLED", "false").lower() == "true"
@@ -120,7 +213,7 @@ WAKE_WORD_PORCUPINE_ACCESS_KEY = (
 ).strip()
 
 # === GPIO Config ===
-BUTTON_PIN = int(os.getenv("BUTTON_PIN", "27"))
+BUTTON_PIN = 27 if BILLY_PINS == "legacy" else 24  # legacy=pin 13, new=pin 18
 
 # === MQTT Config ===
 MQTT_HOST = os.getenv("MQTT_HOST", "")
@@ -140,6 +233,18 @@ ALLOW_UPDATE_PERSONALITY_INI = (
 
 # === Software Config ===
 FLASK_PORT = int(os.getenv("FLASK_PORT", "80"))
+SHOW_SUPPORT = os.getenv("SHOW_SUPPORT", True)
+FORCE_PASS_CHANGE = os.getenv("FORCE_PASS_CHANGE", "false").lower() == "true"
+SHOW_RC_VERSIONS = os.getenv("SHOW_RC_VERSIONS", "False")
+FLAP_ON_BOOT = os.getenv("FLAP_ON_BOOT", "false").lower() == "true"
+MOCKFISH = os.getenv("MOCKFISH", "false").lower() == "true"
+
+# === News Digest Config ===
+NEWS_REQUEST_TIMEOUT_SECONDS = float(os.getenv("NEWS_REQUEST_TIMEOUT_SECONDS", "6"))
+
+# === User Profile Config ===
+DEFAULT_USER = os.getenv("DEFAULT_USER", "guest").strip()
+CURRENT_USER = os.getenv("CURRENT_USER", "").strip()
 
 
 def is_classic_billy():

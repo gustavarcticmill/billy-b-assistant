@@ -1,3 +1,14 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Response history audio files
+sounds/response-history/
+
+# grok 
+.grok
+
 # MACOS-SPECIFIC FILES
 ## General
 .DS_Store
@@ -69,5 +80,11 @@ versions.ini
 venv
 webconfig/node_modules
 
+
 # Folders
 sounds/response-history
+personas/
+!persona_presets/*/persona.ini
+profiles/
+custom_songs/
+3d_files/

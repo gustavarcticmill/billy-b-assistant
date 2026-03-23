@@ -5,8 +5,8 @@ The **Billy Bass Assistant** is a Raspberry Pi–powered voice assistant embedde
 > **This project is still in BETA.** Things might crash, get stuck or make Billy scream uncontrollably (ok that last part maybe not literally but you get the point). Proceed with fishy caution.
 
 ![Billy Bathroom](./docs/images/billy_bathroom.jpeg)
-![Billy UI](./docs/images/web-UI.png)
-<img src="./docs/images/web-UI-Mobile.png" alt="Billy UI Mobile" style="width: 33%;" />
+![Billy UI](./docs/images/Web-UI.png)
+<img src="./docs/images/Web-UI-Mobile.png" alt="Billy UI Mobile" style="width: 33%;" />
 ---
 
 ## Features
@@ -16,24 +16,33 @@ The **Billy Bass Assistant** is a Raspberry Pi–powered voice assistant embedde
 - Physical button to start/interact/intervene
 - 3D-printable backplate for housing USB microphone and speaker
 - Support for the Modern Billy hardware version with 2 motors as well as the Classic Billy hardware version (3 motors)
+- Custom song playback with coordinated mouth and tail animations
+- Home Assistant command passthrough using the Conversation API
+- News digest tool for headlines, weather, and sports updates 
+  - Dedicated News settings section with topic-tagged RSS sources managed in the Web UI
 - Lightweight web UI:
-  - Adjust settings and persona of Billy
+  - User profile management with memory system
+  - Multiple personas with configurable voices and traits
+  - Song manager for custom songs with upload and playback configuration
+  - Adjust settings like custom Hostname and Port configuration
   - View debug logs
   - Start/stop/restart Billy
-  - Export/Import of settings and persona
-  - Hostname and Port configuration
+  - Export/Import of settings, personas, and user profiles
 - MQTT support:
   - sensor with status updates of Billy (idle, speaking, listening)
   - `billy/say` topic for triggering spoken messages remotely
   - Raspberry Pi Safe Shutdown command
-- Home Assistant command passthrough using the Conversation API
-- Custom Song Singing and animation mode
 
 ---
 
-## Hardware build instructions
+## Hardware 
 
 See [BUILDME.md](./docs/BUILDME.md) for detailed build/wiring instructions.
+
+**OR** 
+
+Check out my Etsy page https://thingsfromthom.etsy.com/ to buy a pre-assembled version that is ready to go.
+
 
 ---
 
@@ -95,7 +104,9 @@ sudo reboot
 
 ---
 
-## C. GPIO Voltage Configuration (Motor Safety)
+## C. GPIO Voltage Configuration (Motor Safety) (DEPRECATED)
+> ⚠️ **Note:** These `/boot/config.txt` entries are only required with the deprecated legacy pin layout.
+> For the new pin layout, the unused inputs are already tied to ground and no config changes are needed.
 
 When the Raspberry Pi powers up, all GPIO pins are in an **undefined state** until the Billy B-Assistant software takes control. This can cause the **motor driver board to activate or stall** the motors momentarily. To prevent stalling and overheating the motors in case the software doesn't start, we set all the gpio pins to Low at boot:
 
@@ -227,11 +238,13 @@ Make sure Python 3 is installed:
 python3 --version
 ```
 
+> **Note:** Python 3.13 is supported but requires the system lgpio library. If you experience issues, Python 3.11 or 3.12 are also recommended.
+
 Install required system packages:
 
 ```bash
 sudo apt update
-sudo apt install -y python3-pip libportaudio2 ffmpeg
+sudo apt install -y python3-pip libportaudio2 ffmpeg liblgpio-dev liblgpio1 swig
 ```
 
 Create Python virtual environment:
@@ -418,8 +431,9 @@ WAKE_WORD_PORCUPINE_ACCESS_KEY=pvx_********************************
 ```
 
 **OPENAI_API_KEY**: (Required) get it from <https://platform.openai.com/api-keys>  
-**VOICE**: The OpenAI voice model to use (`onyx`, `shimmer`, `nova`, `echo`, `fable`, `alloy`, or `ballad`, `ash` is default)  
+**VOICE**: The OpenAI voice model to use (`alloy`, `ash`, `ballad`, `coral`, `echo`, `sage`, `shimmer`, `verse`, `marin`, or `cedar`, `ballad` is default)  
 **MQTT_\***: (Optional) used if you want to integrate Billy with Home Assistant or another MQTT broker  
+**NEWS_DEFAULT_LOCATION / NEWS_DEFAULT_COUNTRY / NEWS_DEFAULT_LANGUAGE**: (Optional) defaults for weather and regional headlines  
 **MIC_TIMEOUT_SECONDS**: How long Billy should wait after your last mic activity before ending input  
 **SILENCE_THRESHOLD**: Audio threshold (RMS) for what counts as mic input;lower this value if Billy interrupts you too quickly, set higher if Billy doesn't respond (because he thinks you're still talking)  
 **DEBUG_MODE**: Print debug information such as OpenAI responses to the output stream  
@@ -501,57 +515,59 @@ You can tweak this to reflect a different vibe: poetic, mystical, overly formal,
 
 ### Custom Songs
 
-Billy supports a "song mode" where he performs coordinated audio + motion playback using a structured folder:
+Billy supports a "song mode" where he performs coordinated audio + motion playback. You can manage custom songs directly through the **Web UI** by clicking the **Songs** button in the header.
+
+#### Using the Song Manager
+
+1. **Access the Song Manager**: Click the **Songs** button (🎵) in the web UI header
+
+2. **Copy Example Song**: Click "Copy Example" to create a template song in your `custom_songs/` directory
+
+3. **Create or Edit a Song**:
+   - Click a song to edit it, or create a new one
+   - Upload audio files:
+     - `full.wav` - Main audio (played to speakers)
+     - `vocals.wav` - Audio used to flap the mouth (lip sync)
+     - `drums.wav` - Audio used to flap the tail (based on RMS)
+   - Configure playback settings:
+     - **Title**: Display name for the song
+     - **Keywords**: Words Billy should recognize to trigger this song
+     - **BPM**: Tempo used to synchronize timing
+     - **Gain**: Volume multiplier for audio intensity
+     - **Tail Threshold**: RMS threshold for tail movement (increase if tail flaps too little, decrease if too much)
+     - **Compensate Tail**: Offset in beats to compensate tail latency (0-1, fraction of beat length)
+     - **Head Moves**: Comma-separated list of `time:duration` values (e.g., `4.0:1,8.0:0,12.0:1`)
+     - **Half Tempo Tail Flap**: Toggle to flap tail on every 2nd beat
+
+4. **Preview Audio**: Use the play buttons to preview each audio file before saving
+
+5. **Save**: Click "Save Song" to store your configuration
+
+#### Audio File Requirements
+
+- **Format**: WAV files at 48 kHz, 16-bit, Stereo
+- **Splitting**: Use an AI tool like [Vocal Remover](https://vocalremover.org/) to split your song into separate stems
+
+#### File Structure
+
+Songs are stored in `./custom_songs/your_song_name/`:
 
 ```bash
-./sounds/songs/your_song_name/
-├── full.wav      # Main audio (played to speakers)
-├── vocals.wav    # Audio used to flap the mouth (lip sync)
-├── drums.wav     # Audio used to flap the tail (based on RMS)
-├── metadata.txt  # Optional: timing & motion config
+./custom_songs/your_song_name/
+├── full.wav       # Main audio (played to speakers)
+├── vocals.wav     # Audio used to flap the mouth (lip sync)
+├── drums.wav      # Audio used to flap the tail (based on RMS)
+└── metadata.ini   # Playback configuration
 ```
-
-To add a song:
-
-1. Split your desired song (with an ai tool like [Vocal Remover and Isolation](https://vocalremover.org/)) into separate stems for vocal, music and drums.
-
-2. Create a new subfolder inside `./sounds/songs/` with your song name
-
-3. Include at minimum:
-
-- `full.wav` the song to play
-- `vocals.wav` the isolated vocals or melody track
-- `drums.wav` a beat track used for tail flapping
-
-4. (Optional) Create a `metadata.txt` to fine-tune movement timing.
-
-#### `metadata.txt` Format
-
-```ini
-gain=1.0
-bpm=120
-tail_threshold=1500
-compensate_tail=0.2
-half_tempo_tail_flap=false
-head_moves=4.0:1,8.0:0,12.0:1
-```
-
-**gain**: multiplier for audio intensity  
-**bpm**: tempo used to synchronize timing  
-**tail_threshold**: RMS threshold for tail movement (increase/decrease value when tail flaps too little/much)  
-**compensate_tail**: offset in beats to compensate tail latency  
-**half_tempo_tail_flap**: if true, flaps tail on every 2nd beat  
-**head_moves**: comma-separated list of `beat:duration` values  
-  → At beat `2`, move head for `2.0s`, at `29.5`, move for `2.0s`, etc.  
 
 #### Triggering a Song in Conversation
 
 Billy supports function-calling to start a song. Just say something like:
 
-- “Can you play the *River Groove*?”
-- “Sing the *Tuna Tango* song.”
+- "Can you play *Fishsticks*?"
+- "Sing the *River Groove* song."
 
-If the folder exists it will play the contents with full animation.
+If a song with that name or title exists, Billy will play it with full animation.
 
 ---
 
@@ -617,6 +633,15 @@ Please check the [existing issues](https://github.com/Thokoop/billy-b-assistant/
 
 ---
 
+# MockFish Mode 
+
+MockFish is a development and testing mode designed for this project, eliminating 
+the need for a physical Billy Bass fish. Motor movements are simulated, and the 
+local device's microphone and speakers are utilized. This mode is particularly useful
+for testing new GUI features, integrating new AI providers, and evaluating personality behaviors.
+
+---
+
 # Support the Project
 
 Billy B-Assistant is a project built and maintained for fun and experimentation, free for **personal** and **educational** use.
@@ -642,6 +667,6 @@ Pull requests are welcome! If you have an idea for a new feature, bug fix, or im
 
 Enjoying the project? Feel free to leave a small tip, totally optional, but much appreciated!
 
-![Paypal](./docs/images/qrcode.png)
+![Paypal](./webconfig/static/images/qrcode.png)
 
 https://paypal.me/thomkoopman050

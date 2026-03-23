@@ -1,5 +1,53 @@
 @import "tailwindcss";
 
+@font-face {
+    font-family: 'Material Icons';
+    font-style: normal;
+    font-weight: 400;
+    src: url(../fonts/material-icons.woff2) format('woff2');
+}
+
+.material-icons {
+    font-family: 'Material Icons';
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    -webkit-font-feature-settings: 'liga';
+    -webkit-font-smoothing: antialiased;
+}
+
+.prose p {
+    margin-bottom: 0.5rem;
+    color: #e4e4e7; /* zinc-200 */
+}
+
+.prose ul {
+    list-style-type: disc;
+    margin-left: 1.2rem;
+    color: #e4e4e7; /* zinc-200 */
+}
+
+.prose a {
+    text-decoration: underline;
+    color: #34d399; /* emerald-400 */
+}
+
+.prose strong {
+    color: #6ee7b7; /* emerald-300 */
+    font-weight: 600;
+}
+
+.prose em {
+    color: #a7f3d0; /* emerald-200 */
+    font-style: italic;
+}
 
 /* Scrollbar styling for WebKit browsers */
 ::-webkit-scrollbar {

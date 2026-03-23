@@ -4,99 +4,227 @@ All notable changes to this project will be documented in this file.
 
 ---
 
-## [1.0.0] — 2025-05-25
-### Initial Version
-**Core Functionality**
-- Real-time, full-duplex voice assistant powered by OpenAI GPT-4o.
-- Assistant input/output using `sounddevice` with a push-button session trigger.
-- Streaming response handling with chunked playback and lip-syncing via RMS analysis.
-- Motor control using Raspberry Pi GPIO:
-    - PWM-based mouth movement synchronized to speech.
-    - Head and tail motion via H-bridge motor drivers.
-
-**Personality System**
-- Configurable personality traits via `persona.ini` with real-time runtime updates using function calling.
-- Trait categories include: `humor`, `sarcasm`, `honesty`, `confidence`, `verbosity`, `curiosity`, and more.
-- Backstory and behavioral instructions stored in `persona.ini` with structured `[PERSONALITY]`, `[BACKSTORY]`, and `[META]` sections.
-
-**Hardware & Setup**
-- 3D-printable backplate to mount USB microphone and speaker in the Billy Bass enclosure.
-- GPIO safe boot state configuration to prevent motor activation during Pi startup.
-- Systemd integration (`billy.service`) for background operation and autostart at boot.
-
-**Audio System**
-- Configurable voice model (`VOICE`) via `.env` file.
-- Adjustable silence threshold and mic timeout for voice session logic.
-
-**MQTT Integration (Optional)**
-- Basic MQTT connectivity for status reporting, safe shutdown Raspberry Pi command and future integration with Home Assistant.
-
-**Song Mode**
-- Folder-based song playback system supporting:
-    - `full.wav` for audio
-    - `vocals.wav` and `drums.wav` for animated flapping (mouth and tail)
-    - `metadata.txt` to control animation timing and motion profiles
-- Function-calling support to trigger songs via conversation with Billy.
-
-## [1.1.0] — 2025-07-18
-### Adds initial version of Home Assistant API integration and major stability improvements.
+## [2.1.1] — 2026-03-14
 
 ### Added
+- **Wake-up Preview MQTT Bridge**: Added `billy/wakeup/play` MQTT topic handling so wake-up clip previews can be played by the running `billy.service` process (the GPIO owner), enabling mouth movement during preview from the Web UI.
+- **Billy Berserk Persona Preset**: Added a new `billy-berserk` persona preset with an aggressive chaotic style.
 
-- Initial integration with Home Assistant's conversation API.
-- Graceful fallback when Home Assistant is not configured.
-- New environment variable `ALLOW_UPDATE_PERSONALITY_INI` to prevent users from permanently changing Billy's personality traits.
-- Wake-up audio now blocks the assistant from listening until playback is complete.
-- Retain reference to mic checker task to avoid premature destruction.
-- Added Ruff linter with configuration and a pre-commit hook.
-- Added `CHANGELOG.md`.
+### Changed
+- **Wake-up Preview Routing**: Updated Web UI wake-up preview flow to prefer MQTT playback via `billy.service`, with `aplay` fallback in webconfig. This avoids importing core audio/movement modules in webconfig and prevents GPIO ownership conflicts.
+- **User/Profile Switching (Web UI Backend)**: Updated `/current-user` routes to use and persist `CURRENT_USER` in `.env`, and to align `persona_manager` with the selected profile's `preferred_persona`.
+- **Session Shutdown Resilience**: Improved stuck-session cleanup paths (button + MQTT stop/start flows) with stronger timeout handling and forced close fallbacks to reduce stale session thread lockups.
+
+### Fixed
+- **Persona Voice Persistence**: Fixed multiple realtime session update paths that changed instructions but not audio voice, causing voice to remain at `ballad` despite persona changes.
+- **Persona Switch Consistency**: Fixed profile/persona switch path where voice-change handling could return early before fully applying the new persona state.
+- **Session Startup Voice Selection**: Added safer persona voice resolution and startup logging to verify which persona voice is sent at connect time.
+- **Web UI Profile Loading**: Fixed cases where switching users from the UI would still load fallback/default profile behavior instead of the selected user's stored persona context.
+
+---
+
+## [2.1.0] — 2026-03-12
+
+### Added
+- **OpenAI Realtime Model Support**: Added support for selecting `gpt-realtime-1.5` in the Web UI and `.env` configuration.
+- **News Digest Tool**: Added a new `get_news_digest` function-call tool so Billy can fetch live headlines, weather forecasts, and sports scoreboards with optional topic, team, and regional filters.
+- **News Sources Manager (Web UI)**: Added a UI list to add/remove/toggle RSS headline sources and persist them for Billy's news briefings.
+- **MQTT commands**: Added discovery/config entities for `Billy Restart`, `Billy Reboot`, and `Billy Listen` on `billy/command`. Added support for the `listen` command over MQTT to start/stop Billy listening remotely. (contribution by: @Marko181)
+
 
 ### Changed
 
-- Audio session now ensures WebSocket session is created before sending audio.
-- All audio sends are awaited to prevent race conditions.
-- WebSocket connections now use additional mutex locking to avoid lifecycle errors.
-- Improved full audio transcript logging with newlines.
-- Error responses from the assistant API are now shown clearly in the output stream.
-- Cleaned up import statements and used proper relative imports.
-- MQTT logic now checks if MQTT is configured before sending or receiving.
+- **Restart Controls (Web UI)**: Removed the separate **Restart UI** button to avoid confusion. The remaining **Restart** button now performs the same full restart behavior as the old Restart UI action, restarting both `billy.service` and `billy-webconfig.service`.
+- **WebSocket Integration**: Replaced HTTP polling with WebSocket for real-time status and log updates in the Web UI, significantly reducing network overhead and improving responsiveness.
+- **Listening State Feedback**: Updated head movement timing so the head moves out when Billy is actually listening, rather than during the wake-up clip.
+- **Moved .env editor**: Moved the .env editor from the header to the Advanced Settings section.
+- **MQTT Startup Behavior**: MQTT broker connection now retries in the background until successful instead of failing once at startup. (contribution by: @Marko181)
 
 ### Fixed
 
-- Fixed race condition where audio might be sent before the session is initialized.
-- Prevented audio from being interpreted when `self.ws` is unexpectedly reset.
-- Suppressed redundant session-end output.
-- Addressed expected `CancelledError` when stopping sessions.
-- Removed duplicate and unused imports and functions.
-- Removed duplicate `aiohttp` dependency from `requirements.txt`.
-- Fixed potential undefined variable.
-- Fixed usage of legacy `websockets` API.
-- Added missing dependencies: `aiohttp`, `lgpio`.
+- **Service Status Endpoint**: Fixed `/service/status` returning HTTP 500 when `billy.service` is inactive (for example during mic/speaker tests). The endpoint now reports inactive/failed states correctly instead of crashing.
+- **Manual Interrupt Flow**: Simplified interruption handling back to button-first behavior. During a session, one press now interrupts the current response and reopens the mic, while a second press stops the session.
+- **Session Audio Stability**: Improved wake-up-to-listening handoff so Billy more reliably waits for the wake-up sound to finish before opening the mic, reducing stuck startup states and false early listening behavior.
+- **Listening and Shutdown Reliability**: Refined mic/session cleanup and state transitions to reduce hanging stops, duplicate stop handling, and noisy shutdown behavior during follow-up and retry flows.
+- **User Greeting**: Fixed asyncio.sleep calls in user identification flow that prevented Billy from acknowledging new user profiles.
+- **Wake-up sound**: Trimmed silent audio segments from the default wake-up sounds to improve responsiveness.
 
-## [1.2.0] — 2025-07-24
+## [2.0.6] — 2026-03-05
 
-### Web UI 
+### Fixed
+
+- **Version Detection**: Fixed bug where pre-release/RC tags would still show up even if `SHOW_RC_VERSIONS=false`
+
+---
+
+## [2.0.5] — 2026-02-07
 
 ### Added
-- Web-based user interface for easy configuration of Billy
-  - Versioning check logic during boot & button to trigger OTA update
-  - Speaker volume test and control in UI.
-  - Tailwind CSS included locally for styling.
-  - Password field visibility toggles in the UI.
-  - Dropdown for selecting voice options in UI.
-  - Mic input and speaker output level test utility.
-- Option to change openAI Model
-- Compatibilty for Classic Billy Model with 3 motors
 
-### Improved
-- Folder structure simplified and clarified.
-- Automatic creation of `.env` and `persona.ini` from *.example files on first run.
-- Committed `persona.ini`; now ignored by `.gitignore`.
+- **MQTT Song Endpoint**: Added MQTT command support to play songs via the `billy/song` topic.
+- **Factory Reset Options**: Added option in the settings to reset configuration. (.env file, user profiles .ini's, custom personas .ini's, logs, git, wifi, reboot)
 
-### Added in beta
-- MQTT "say" command integration for announcing messages
-- Systemd service install process.
-- Wi-Fi onboarding form (captive portal)
+### Changed
+
+- **Persona Form**: Renamed the identity section and combined voice controls into the “Persona Voice & Expression” area.
+
+### Fixed
+
+- **Provider Startup**: Missing API keys no longer hard-fail startup; a warning is logged and services continue.
+- **Voice Options Load**: Config endpoint now handles missing realtime providers without crashing.
+
+---
+
+## [2.0.4] — 2025-02-02
+
+### Added
+
+- **Realtime AI Providers**: Introduced a `RealtimeAIProvider` abstraction with a provider registry to support multiple realtime AI backends (contribution by: @turekaj)
+- **XAI Provider (Beta)**: XAI support is currently beta and not fully integrated into the UI yet. For now, enable it by adding `REALTIME_AI_PROVIDER=xai` and `XAI_API_KEY=XAI API KEY HERE` to your `.env` file manually. (contribution by: @turekaj)
+- **Startup Flap Toggle**: Added `FLAP_ON_BOOT` setting and UI control to enable the startup flap animation only when desired. (contribution by: @turekaj)
+
+### Fixed
+
+- **Installation Documentation**: Added missing `swig` dependency to installation instructions. The `lgpio` Python package requires `swig` to build from source, which was causing installation failures.
+
+---
+
+## [2.0.3] — 2025-01-09
+
+### Added
+
+- **Mockfish Development Mode**: Added `MOCKFISH` environment variable to enable development and testing without physical hardware. When enabled, GPIO operations and button presses are mocked, allowing full testing of Billy's functionality on any machine without a Raspberry Pi or physical Billy Bass. (contribution by: @turekaj)
+
+### Fixed
+
+- **Version Detection**: Fixed issue where the updater would show an incorrect version (e.g., v2.0.1) even when a newer tag (e.g., v2.0.2) was checked out. Improved version detection logic now properly handles detached HEAD state and uses multiple fallback methods (`git tag --points-at HEAD`, `git describe --tags --exact-match`, `git describe --tags`) to accurately detect the current checked-out version.
+- **Logging Integration**: Version detection and update processes now use the centralized logging system, respecting the `LOG_LEVEL` setting for appropriate verbosity.
+
+---
+
+## [2.0.2] — 2025-12-25
+
+### Fixed
+
+- **Song Interruption**: Fixed critical bug where interrupting a song (especially after multiple times) would cause the session to hang indefinitely. Button presses after interruption would have no effect. The fix adds proper interrupt checking in the song playback loop and uses a timeout-based approach instead of blocking indefinitely.
+- **Documentation**: Added missing `liblgpio-dev` and `liblgpio1` system dependencies to installation instructions. These packages are required for the `lgpio` Python package to build successfully.
+
+---
+
+## [2.0.1] — 2025-12-07
+
+### Fixed
+
+- **MQTT Session Hanging**: Fixed issue where MQTT announcements without follow-up (e.g., "The washing machine is finished") would leave the session open indefinitely until hitting OpenAI's 60-minute timeout limit. Sessions now properly close when no follow-up is needed.
+
+---
+
+## [2.0.0] — 2025-11-02
+>### 🎉 Major New Features:
+> User Profiles with memories - Multiple Personas - Custom Song Manager - Mqtt Say command support for follow-ups 
+
+>### ⚠️ For existing builds of Billy
+>
+> **If you're coming from <= v1.4.0:** Please select the Legacy Pin Layout in the Hardware Settings tab of the Web UI if you can't switch to the new unified wiring layout (see [BUILDME.md](./docs/BUILDME.md#from-motor-driver-to-raspberry-pi-gpio-pinout))
+
+### Added
+
+- **User Profiles**: Billy now identifies users when they introduce themselves (e.g., "Hi Billy, it's Thom")
+  - Create/switch profiles, set display names, guest mode
+  - Import/export profiles
+  - Profile-specific statistics like interaction count and last seen timestamps
+- **Memory System**: Billy remembers facts, preferences, and relationships for each user
+  - Categorize by type (fact, preference, relationship, event, other)
+  - Set importance levels (low, medium, high)
+  - Edit/delete memories through UI
+- **Multiple Personas**: Create and switch between different Billy personalities
+  - Voices and mouth articulation per persona
+  - Configurable personality traits (humor, sarcasm, honesty, etc.)
+  - Import/export personas
+  - Mid-conversation persona switching with graceful voice changes
+  - Persona presets/templates for quick setup
+- **Custom Song Manager**: Web UI for managing custom songs
+  - Upload custom audio files (full.wav, vocals.wav, drums.wav)
+  - Configure playback & animation settings (gain, tail threshold, compensate tail, head moves, half tempo tail flap)
+  - Set song title and keywords for AI-triggered playback
+  - Preview audio files before saving
+  - Copy example songs to get started
+- **UI Improvements**: 
+  - 4-level configurable logging (ERROR/WARNING/INFO/VERBOSE)
+  - Loading states and optimized polling
+
+### Changed
+
+- **Persona Storage**: Personas now stored in `./personas/persona_name/persona.ini`. The default persona remains at `./persona.ini` for backward compatibility.
+- **Custom Wake-up Sounds**: Wake-up sounds are now saved per persona instead of globally
+- **Logging System**: Replaced `DEBUG_MODE` with configurable `LOG_LEVEL` system (ERROR/WARNING/INFO/VERBOSE)
+- **Mouth Articulation**: Now configured per persona instead of globally
+- **Song Metadata Format**: Updated from `metadata.txt` to `metadata.ini` for consistency
+- **Song Directory**: Custom songs now stored in `custom_songs/` (git-ignored) instead of `sounds/songs/` (which still holds the fishsticks song as a template)
+- **MQTT Follow-up Handling**: MQTT prompts now respect `follow_up_intent` - if Billy asks a question via MQTT (e.g., "What's your favorite color?"), the mic stays open for your response in `auto` mode
+
+### Fixed
+
+- **Self-Triggering**: Billy no longer hears his own wake-up sounds
+- **Head Movement**: Prevented head from getting stuck during routines
+- **Session Hanging**: Added timeouts to prevent stuck sessions
+- **Audio**: Standardized RMS calculations for consistent silence detection
+- **Function Call Flow**: Fixed "conversation already has an active response" error by properly closing function calls with `function_call_output` before OpenAI auto-generates responses
+- **GPIO Cleanup**: Fixed "double free or corruption" crash on shutdown by properly closing GPIO resources
+- **Smart Home Commands**: Billy now correctly distinguishes between direct commands ("turn on lights") and questions ("ask if lights should be on") - no longer executes commands when asked to ask first
+- **Function Confirmations**: Fixed issue where Billy wouldn't always provide spoken confirmation after smart home commands and personality changes - now reliably triggers verbal responses
+
+---
+
+## [1.5.0] — 2025-10-13
+
+>### ⚠️ For existing builds of Billy: ⚠️ 
+> 
+> **Please select the Legacy Pin Layout in the Hardware Settings tab of the Web UI if you can't switch to the new unified wiring layout (see [BUILDME.md](./docs/BUILDME.md#from-motor-driver-to-raspberry-pi-gpio-pinout))**
+
+### Added
+- **Configurable Pin Layouts:** Introduced `BILLY_PINS` Pin Layout setting (`new` / `legacy`) to switch between the new (default) pin layout and the legacy pin layout (for builds before october '25)
+- **Mouth Articulation Control:** Added `MOUTH_ARTICULATION` (1–10) setting to fine-tune speech motion responsiveness.
+- **Error Sound Handling:**  Centralized error playback — now plays `error.wav`, `noapikey.wav`, or `nowifi.wav` depending on the issue.
+- **Release notes notification:** Notification in the UI with the release notes of the latest version.
+
+### Changed
+- **Unified GPIO Logic:** Refactored motor control for both Modern (2-motor) and Classic (3-motor) models into a single system. Default pin assignments moved to safer GPIOs. Unused H-bridge inputs are now grounded;
+- **Movement Refinements:** Improved PWM handling and non-blocking motion timing for smoother, more natural flapping.
+- **UI Enhancements:** Added Billy artwork to header and included reboot/power/restart-ui buttons. Improved feedback for mic and speaker device tests.
+
+### Fixed
+- Minor mouth sync inconsistencies under load.
+- Occasional stalls caused by blocking PWM threads.
+- Better recovery after OpenAI API or network errors.
+- Motor watchdog will now disengage any motor that is on > 30 seconds
+
+---
+
+## [1.4.0] — 2025-09-04
+
+### Added
+
+- **Say command**: Added a MQTT command to let billy announce messages, either as literal sentences or as prompts.
+- **Custom Wake-up Sounds**: Custom Wake-up sounds can now be customised and generated via the UI
+- **New gpt-realtime model**: Added Support for the new stable release of the openAI Realtime API model.
+- **Favicon**: No more 404
+
+### Changed
+
+- Improved update process by re-installing python requirements on software update
+- Updated personality traits prompt to be more descriptive and more distinct.
+- Disabled Flask debug mode by default.
+
+---
+
+## [1.3.1] — 2025-08-19
+
+### Added
+
+- **Shutdown and restart**: Added raspberry pi shutdown and restart buttons in the UI (contribution by @cprasmu )
+
+---
 
 ## [1.3.0] — 2025-07-28
 
@@ -120,23 +248,30 @@ All notable changes to this project will be documented in this file.
 
 - **Motor Retract Fix**: Ensures Billy's head reliably returns to neutral after session ends.
 
-## [1.3.1] — 2025-08-19
+---
+
+## [1.2.0] — 2025-07-24
 
 ### Added
 
-- **Shutdown and restart**: Added raspberry pi shutdown and restart buttons in the UI (contribution by @cprasmu )
-
-## [1.4.0] — 2025-09-04
-
-### Added
-
-- **Say command**: Added a MQTT command to let billy announce messages, either as literal sentences or as prompts.
-- **Custom Wake-up Sounds**: Custom Wake-up sounds can now be customised and generated via the UI
-- **New gpt-realtime model**: Added Support for the new stable release of the openAI Realtime API model.
-- **Favicon**: No more 404
+- Web-based user interface for easy configuration of Billy
+  - Versioning check logic during boot & button to trigger OTA update
+  - Speaker volume test and control in UI.
+  - Tailwind CSS included locally for styling.
+  - Password field visibility toggles in the UI.
+  - Dropdown for selecting voice options in UI.
+  - Mic input and speaker output level test utility.
+- Option to change openAI Model
+- Compatibilty for Classic Billy Model with 3 motors
 
 ### Changed
 
-- Improved update process by re-installing python requirements on software update
-- Updated personality traits prompt to be more descriptive and more distinct.
-- Disabled Flask debug mode by default.
+- Folder structure simplified and clarified.
+- Automatic creation of `.env` and `persona.ini` from *.example files on first run.
+- Committed `persona.ini`; now ignored by `.gitignore`.
+
+### Added in beta
+
+- MQTT "say" command integration for announcing messages
+- Systemd service install process.
+- Wi-Fi onboarding form (captive portal)

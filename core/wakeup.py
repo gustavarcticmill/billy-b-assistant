@@ -1,19 +1,27 @@
 import asyncio
-import base64
-import json
 import os
 import re
 import wave
+from typing import Optional
 
-import websockets.legacy.client
-
-from .config import CUSTOM_INSTRUCTIONS, OPENAI_API_KEY, OPENAI_MODEL, VOICE
+from .config import CUSTOM_INSTRUCTIONS
+from .realtime_ai_provider import voice_provider_registry
 
 
 WAKEUP_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "../sounds/wake-up/custom")
 )
 os.makedirs(WAKEUP_DIR, exist_ok=True)
+
+
+def get_persona_wakeup_dir(persona_name: str) -> str:
+    """Get the wake-up directory for a specific persona."""
+    persona_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../personas", persona_name)
+    )
+    wakeup_dir = os.path.join(persona_dir, "wakeup")
+    os.makedirs(wakeup_dir, exist_ok=True)
+    return wakeup_dir
 
 
 def slugify(text: str) -> str:
@@ -24,103 +32,69 @@ def get_wakeup_path(phrase: str) -> str:
     return os.path.join(WAKEUP_DIR, f"{slugify(phrase)}.wav")
 
 
-def generate_wake_clip_async(prompt, index):
-    path = os.path.join(WAKEUP_DIR, f"{index}.wav")
+class WakeupClipGenerator:
+    def __init__(self, *, voice: Optional[str] = None, persona_name: str = "default"):
+        self.persona_name = persona_name
 
-    async def _generate():
-        uri = f"wss://api.openai.com/v1/realtime?model={OPENAI_MODEL}"
-        headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "openai-beta": "realtime=v1",
-        }
+        # Get voice from persona if not specified
+        if voice:
+            self.voice = voice
+        else:
+            try:
+                from .persona_manager import persona_manager
 
-        print(f"🔊 Connecting to OpenAI realtime for: {prompt} → {index}", flush=True)
+                self.voice = persona_manager.get_persona_voice(persona_name)
+            except Exception:
+                self.voice = "ballad"  # Default voice
 
+    async def generate(self, prompt: str, index: int) -> str:
+        # Use appropriate directory based on persona
+        if self.persona_name == "default":
+            # For default persona, use the custom directory
+            path = os.path.join(WAKEUP_DIR, f"{index}.wav")
+        else:
+            # For other personas, use persona-specific directory
+            persona_wakeup_dir = get_persona_wakeup_dir(self.persona_name)
+            path = os.path.join(persona_wakeup_dir, f"{index}.wav")
+
+        provider = voice_provider_registry.get_provider()
+
+        print(f"🔊 Generating wakeup clip for: {prompt} → {index}")
+
+        # Get current persona instructions
         try:
-            async with websockets.legacy.client.connect(
-                uri, extra_headers=headers
-            ) as ws:
-                print("🛰️ Connected to OpenAI realtime", flush=True)
+            from .persona_manager import persona_manager
 
-                await ws.send(
-                    json.dumps({
-                        "type": "session.update",
-                        "session": {
-                            "voice": VOICE,
-                            "modalities": ["text", "audio"],
-                            "output_audio_format": "pcm16",
-                            "turn_detection": {"type": "semantic_vad"},
-                            "instructions": (
-                                "Always respond by speaking the exact user text out loud. Do not change or rephrase anything!\n\n"
-                                + CUSTOM_INSTRUCTIONS
-                            ),
-                        },
-                    })
-                )
-                print("🗣️ Sent session update", flush=True)
+            persona_instructions = persona_manager.get_persona_instructions(
+                self.persona_name
+            )
+        except Exception:
+            persona_instructions = CUSTOM_INSTRUCTIONS
 
-                await ws.send(
-                    json.dumps({
-                        "type": "conversation.item.create",
-                        "item": {
-                            "type": "message",
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "input_text",
-                                    "text": "Repeat this literal message:" + prompt,
-                                }
-                            ],
-                        },
-                    })
-                )
-                print("📤 Sent prompt", flush=True)
+        instructions = (
+            "IMPORTANT: Always respond by speaking the exact user text out loud. Do not add, change or rephrase anything!\n\n"
+            + persona_instructions
+        )
 
-                await ws.send(
-                    json.dumps({
-                        "type": "response.create",
-                        "response": {"modalities": ["audio", "text"]},
-                    })
-                )
-                print("⏳ Waiting for response...", flush=True)
+        audio_bytes = await provider.generate_audio_clip(
+            prompt=prompt,
+            voice=self.voice,
+            instructions=instructions,
+        )
 
-                audio_data = bytearray()
+        with wave.open(path, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(24000)
+            wf.writeframes(audio_bytes)
 
-                async for message in ws:
-                    parsed = json.loads(message)
-                    print(f"📩 {parsed['type']}", flush=True)
+        print(f"✅ Saved wakeup clip: {path}")
+        return path
 
-                    if parsed["type"] == "error":
-                        print(
-                            f"❌ OpenAI API error: {json.dumps(parsed, indent=2)}",
-                            flush=True,
-                        )
 
-                    if parsed["type"] in ("response.audio", "response.audio.delta"):
-                        b64 = parsed.get("audio") or parsed.get("delta")
-                        if b64:
-                            audio_data.extend(base64.b64decode(b64))
+def generate_wake_clip_async(prompt, index, persona_name="default"):
+    async def _run():
+        gen = WakeupClipGenerator(persona_name=persona_name)
+        return await gen.generate(prompt, index)
 
-                    if parsed["type"] == "response.done":
-                        break
-
-                print(f"📦 Audio data size: {len(audio_data)} bytes", flush=True)
-
-                if not audio_data:
-                    raise RuntimeError("No audio data received from OpenAI.")
-
-                with wave.open(path, "wb") as wf:
-                    print(f"💾 Writing WAV to: {path}", flush=True)
-                    wf.setnchannels(1)
-                    wf.setsampwidth(2)
-                    wf.setframerate(24000)
-                    wf.writeframes(audio_data)
-
-                print(f"✅ Saved wakeup clip: {path}", flush=True)
-                return path
-
-        except Exception as e:
-            print(f"❌ ERROR during TTS generation: {e}", flush=True)
-            raise
-
-    return asyncio.run(_generate())
+    return asyncio.run(_run())
