@@ -61,8 +61,12 @@ Plans:
   3. The event log shows the last 50 detection events in a scrollable panel, updating in real time
   4. Completing the calibration wizard (Measure Background -> Record Wake Phrase -> Apply Suggestions) produces a threshold recommendation and persists it to .env with one click
   5. The panel is visually consistent with Audio Settings, MQTT, and Home Assistant sections and collapses cleanly
-**Plans**: TBD
+**Plans:** 2 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 03-01-PLAN.md — HTML template and dashboard wiring: wake-word-panel.html, index/base/init.js integration (WWUI-01..10)
+- [ ] 03-02-PLAN.md — JavaScript IIFE module: status polling, toggle, buttons, event log, calibration wizard (WWUI-01, WWUI-04..10)
 
 ## Progress
 
@@ -73,4 +77,4 @@ Phases execute in numeric order: 1 -> 2 -> 3
 |-------|----------------|--------|-----------|
 | 1. Core Integration | 0/3 | Planning complete | - |
 | 2. Web Routes & Settings | 0/2 | Planning complete | - |
-| 3. UI Panel | 0/TBD | Not started | - |
+| 3. UI Panel | 0/2 | Planning complete | - |
