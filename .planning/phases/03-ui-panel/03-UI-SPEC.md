@@ -54,15 +54,15 @@ Source: Inherited from Phase 2 UI-SPEC. Matches existing patterns in settings-fo
 |------|------|--------|-------------|----------------|
 | Body | 14px | 400 (normal) | 1.5 | `text-sm` |
 | Label | 14px | 600 (semibold) | 1.5 | `text-sm font-semibold` |
-| Section Heading | 18px | 700 (bold) | 1.2 | `text-lg font-bold` |
+| Section Heading | 18px | 600 (semibold) | 1.2 | `text-lg font-semibold` |
 | Tooltip / Muted | 12px | 400 (normal) | 1.5 | `text-xs` |
 | Badge Text | 12px | 600 (semibold) | 1.0 | `text-xs font-semibold` |
 | Calibration Metric Value | 16px | 600 (semibold) | 1.2 | `text-base font-semibold` |
 | Calibration Metric Label | 12px | 400 (normal) | 1.5 | `text-xs` |
 
-Weights used: 400 (normal), 600 (semibold), 700 (bold) --- 3 effective weights. Note: The actual codebase uses `font-semibold` (600) for labels (28 occurrences in settings-form.html) and `font-bold` (700) only for section headings (7 occurrences). Phase 3 matches the real codebase pattern, not the Phase 2 UI-SPEC normalization to 2 weights.
+Weights used: 400 (normal) and 600 (semibold) --- 2 weights only. Section headings use `font-semibold` (600) to match the dominant codebase pattern (28 occurrences of `font-semibold` vs 7 of `font-bold`). All `font-bold` occurrences in Phase 3 component HTML are normalized to `font-semibold`.
 
-Source: Detected from settings-form.html actual usage. Labels use `font-semibold`, headings use `font-bold`.
+Source: Detected from settings-form.html actual usage. Normalized to 2-weight maximum.
 
 ---
 
@@ -95,6 +95,10 @@ Source: Badge colors follow the established service-status.js pattern (emerald=a
 
 Accent reserved for: Apply Suggestions button, active collapsible section icons (emerald-400 when expanded), enabled badge background tint.
 
+### Focal Point
+
+Status Header Row is the primary focal point; the status badge and enable/disable toggle must be visually dominant over the action buttons below them.
+
 ---
 
 ## Component Patterns
@@ -107,7 +111,7 @@ This panel is NOT inside the settings modal. It is a standalone panel included i
 <section id="wake-word-panel" class="max-w-6xl mx-auto mt-2 px-2 md:px-0">
     <div class="bg-zinc-900/50 backdrop-blur-xs border border-zinc-700 p-4 rounded-lg shadow-lg mb-4 collapsible-section"
          id="section-wake-word-panel">
-        <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200 hover:text-emerald-400 transition-colors">
+        <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-semibold mb-4 text-slate-200 hover:text-emerald-400 transition-colors">
             <span class="material-icons text-white group-hover:text-emerald-400 transition-colors">hearing</span>
             Wake Word
             <span class="material-icons transition-transform duration-200 ml-2 rotate-0 group-hover:text-emerald-400">expand_more</span>
@@ -161,7 +165,7 @@ Three action buttons in a horizontal row below the status header.
     <button id="ww-refresh-btn"
             class="flex items-center gap-1 bg-zinc-800 hover:bg-zinc-700 text-white text-sm px-3 py-2 rounded transition-colors">
         <span class="material-icons text-base">refresh</span>
-        Refresh
+        Refresh Status
     </button>
 </div>
 ```
@@ -356,7 +360,11 @@ Source: D-01 (2s events), D-06 (3s status).
 |--------|----------|---------|------------|----------|
 | Simulate Detection | `POST /wake-word/test` | `{ "action": "simulate" }` | `showNotification("Detection simulated", "success")` | `showNotification("Simulation failed: " + err, "error")` |
 | Stop Session | `POST /wake-word/test` | `{ "action": "stop" }` | `showNotification("Session stopped", "info")` | `showNotification("Stop failed: " + err, "error")` |
-| Refresh | `GET /wake-word/status` | (none) | Update badge immediately, `showNotification("Status refreshed", "info")` | `showNotification("Refresh failed: " + err, "error")` |
+| Refresh Status | `GET /wake-word/status` | (none) | Update badge immediately, `showNotification("Status refreshed", "info")` | `showNotification("Refresh failed: " + err, "error")` |
+
+### Stop Session Confirmation
+
+"Stop Session" is a destructive action that terminates an active conversation. Confirmation approach: 500ms hold-to-confirm. On first click, the button text changes to "Hold to Stop" with `bg-rose-500/20 text-rose-400` styling for 2 seconds. If the user clicks again within the 2-second window, the stop action fires. If 2 seconds elapse without a second click, the button reverts to its default state. This avoids accidental session kills with minimal friction.
 
 ### Event Log Behavior
 
@@ -416,7 +424,8 @@ Auto-advance delay: 1500ms between steps. Long enough to read results, short eno
 | Enable toggle label | Enable |
 | Simulate button | Simulate Detection |
 | Stop button | Stop Session |
-| Refresh button | Refresh |
+| Stop button (confirm state) | Hold to Stop |
+| Refresh button | Refresh Status |
 | Event log heading | Event Log |
 | Event count label | {N} events |
 | Event log empty state | No detection events yet. Events appear here when the wake word is detected. |
@@ -447,6 +456,12 @@ Auto-advance delay: 1500ms between steps. Long enough to read results, short eno
 | Stop info notification | Session stopped |
 | Refresh info notification | Status refreshed |
 | Error state (controller error) | Wake word controller failed to start. Check the debug log for details. |
+
+### Destructive Actions
+
+| Action | Confirmation Approach |
+|--------|-----------------------|
+| Stop Session | Click-to-arm: first click changes label to "Hold to Stop" with rose tint for 2 seconds. Second click within window executes stop. Auto-reverts after 2 seconds if not confirmed. |
 
 ---
 
