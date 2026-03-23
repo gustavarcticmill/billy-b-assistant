@@ -29,6 +29,7 @@ def create_app() -> Flask:
     from .routes.profiles import profiles_bp
     from .routes.songs import songs_bp
     from .routes.system import bp as system_bp
+    from .routes.wake_word import bp as wake_word_bp
     from .state import bootstrap_versions_and_release_note
 
     # Bootstrap cached data
@@ -41,6 +42,7 @@ def create_app() -> Flask:
     app.register_blueprint(audio_bp)
     app.register_blueprint(misc_bp)
     app.register_blueprint(songs_bp)
+    app.register_blueprint(wake_word_bp)
 
     # Register WebSocket routes
     websocket.sock.init_app(app)
