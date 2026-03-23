@@ -36,9 +36,11 @@ These capabilities exist in the current codebase and work:
 - Wake word settings form section with enable toggle, sensitivity, threshold, endpoint, access key (Validated in Phase 2: Web Routes & Settings)
 - Settings persistence: 5 WAKE_WORD_ keys in CONFIG_KEYS, saved to .env on form submit (Validated in Phase 2: Web Routes & Settings)
 
+- Wake word UI dashboard panel with status badge, event log, calibration wizard (Validated in Phase 3: UI Panel)
+- Wake word JS IIFE module: status/event polling, toggle, action buttons, calibration state machine (Validated in Phase 3: UI Panel)
+
 ### Active
 
-- [ ] Wake word UI panel (enable/disable, calibration wizard, event stream, status badge)
 - [ ] End-to-end hardware verification: button press + wake word both trigger sessions on Pi
 
 ### Out of Scope
@@ -97,4 +99,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-23 after Phase 2 completion*
+*Last updated: 2026-03-23 after Phase 3 completion (milestone complete)*
