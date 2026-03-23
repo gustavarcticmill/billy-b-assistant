@@ -64,6 +64,10 @@ USER SYSTEM:
 
 SONGS: Use play_song for special songs
 
+WEB SEARCH: When the user needs live information from the web, use the web_search tool with their exact question.
+
+WEATHER: When the user asks about the weather, use the get_weather tool to retrieve the latest conditions.
+
 === RESPONSE FLOW ===
 1. [Optional: call tool functions]
 2. Generate speech (ALWAYS speak - never respond with only function calls)
@@ -90,6 +94,10 @@ USER SYSTEM:
 - manage_profile/switch_persona: Change personas
 
 SONGS: Use play_song for special songs
+
+WEB SEARCH: When the user needs live information from the web, use the web_search tool with their exact question.
+
+WEATHER: When the user asks about the weather, use the get_weather tool to retrieve the latest conditions.
 
 === RESPONSE FLOW ===
 1. [Optional: call tool functions]
@@ -225,6 +233,11 @@ MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "")
 HA_HOST = os.getenv("HA_HOST")
 HA_TOKEN = os.getenv("HA_TOKEN")
 HA_LANG = os.getenv("HA_LANG", "en")
+
+# === Weather Config ===
+WEATHER_LATITUDE = os.getenv("WEATHER_LATITUDE")
+WEATHER_LONGITUDE = os.getenv("WEATHER_LONGITUDE")
+WEATHER_LOCATION_NAME = os.getenv("WEATHER_LOCATION_NAME", "")
 
 # === Personality Config ===
 ALLOW_UPDATE_PERSONALITY_INI = (

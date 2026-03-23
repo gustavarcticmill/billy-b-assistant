@@ -32,6 +32,7 @@ The **Billy Bass Assistant** is a Raspberry Pi–powered voice assistant embedde
   - sensor with status updates of Billy (idle, speaking, listening)
   - `billy/say` topic for triggering spoken messages remotely
   - Raspberry Pi Safe Shutdown command
+- Optional live web search and weather lookups using DuckDuckGo Instant Answers and Open-Meteo
 
 ---
 
@@ -424,6 +425,10 @@ DEBUG_MODE=true
 DEBUG_MODE_INCLUDE_DELTA=false
 
 ALLOW_UPDATE_PERSONALITY_INI=true
+# Weather lookup (optional)
+WEATHER_LATITUDE=59.3293
+WEATHER_LONGITUDE=18.0686
+WEATHER_LOCATION_NAME=Stockholm City Centre
 # Wake word settings
 WAKE_WORD_ENABLED=true
 WAKE_WORD_ENDPOINT=/home/pi/billy-b-assistant/wake-word-models/hey_billy.ppn
@@ -439,6 +444,8 @@ WAKE_WORD_PORCUPINE_ACCESS_KEY=pvx_********************************
 **DEBUG_MODE**: Print debug information such as OpenAI responses to the output stream  
 **DEBUG_MODE_INCLUDE_DELTA**: Also print voice and speech delta data, which can get very noisy  
 **ALLOW_UPDATE_PERSONALITY_INI**: If true, personality updates asked for by the user will be written and committed to the personality file. If false, changes to personality parameters will only affect the current running process (`true` is default)  
+**WEATHER_LATITUDE** / **WEATHER_LONGITUDE**: Decimal latitude and longitude used for weather lookups via Open-Meteo.  
+**WEATHER_LOCATION_NAME**: Friendly name included in weather responses (e.g., "Living Room" or "Stockholm").  
 **WAKE_WORD_ENABLED**: Enables the wake-word listener so Billy can start sessions hands-free. The web UI toggle writes this value for you.  
 **WAKE_WORD_ENDPOINT**: Path to the Porcupine keyword file (`.ppn`).  
 **WAKE_WORD_PORCUPINE_ACCESS_KEY**: Picovoice AccessKey required by Porcupine. You can paste this in the Wake Word panel; leaving it blank falls back to the legacy `PICOVOICE_ACCESS_KEY` env var if present.  
