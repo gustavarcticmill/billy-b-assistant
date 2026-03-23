@@ -44,8 +44,12 @@ Plans:
   2. `POST /wake-word/test` triggers a simulated detection session and `stop` ends it — callable without touching hardware
   3. Running the calibration endpoints records ambient and wake-phrase audio and returns suggested threshold and sensitivity values
   4. After a calibration `apply`, restarting the Pi shows the saved wake word settings in effect without re-entering them
-**Plans**: TBD
+**Plans:** 2 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 02-01-PLAN.md — Wake word blueprint: all 6 route handlers + app factory registration (WWEB-01..07)
+- [ ] 02-02-PLAN.md — Settings integration: CONFIG_KEYS addition + settings form section (SETS-01, SETS-02)
 
 ### Phase 3: UI Panel
 **Goal**: Users can configure, monitor, and calibrate wake word detection entirely through the web dashboard without SSH or manual .env editing
@@ -68,5 +72,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Core Integration | 0/3 | Planning complete | - |
-| 2. Web Routes & Settings | 0/TBD | Not started | - |
+| 2. Web Routes & Settings | 0/2 | Planning complete | - |
 | 3. UI Panel | 0/TBD | Not started | - |
