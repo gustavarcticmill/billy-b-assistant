@@ -31,16 +31,16 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Wake Word UI
 
-- [ ] **WWUI-01**: Enable/disable toggle with listener status badge (Listening/Disabled/Paused/Error/Unavailable)
-- [ ] **WWUI-02**: Porcupine endpoint path and access key input fields
-- [ ] **WWUI-03**: Sensitivity slider (0.0-1.0, step 0.05) and RMS threshold input
-- [ ] **WWUI-04**: Simulate Detection / Stop Session / Refresh Status buttons
-- [ ] **WWUI-05**: Event stream display showing last 50 events (scrollable)
-- [ ] **WWUI-06**: Calibration wizard: Measure Background -> Record Wake Phrase -> Apply Suggestions
-- [ ] **WWUI-07**: Calibration results grid showing ambient noise RMS, peak, suggested threshold, and wake phrase peak RMS
-- [ ] **WWUI-08**: "Apply Suggestions" button with threshold display and "persist to .env" checkbox
-- [ ] **WWUI-09**: Panel is collapsible, visually consistent with Audio Settings / MQTT / HA sections
-- [ ] **WWUI-10**: JS module follows IIFE pattern, calls `WakeWordPanel.init()` on DOMContentLoaded
+- [x] **WWUI-01**: Enable/disable toggle with listener status badge (Listening/Disabled/Paused/Error/Unavailable)
+- [x] **WWUI-02**: Porcupine endpoint path and access key input fields
+- [x] **WWUI-03**: Sensitivity slider (0.0-1.0, step 0.05) and RMS threshold input
+- [x] **WWUI-04**: Simulate Detection / Stop Session / Refresh Status buttons
+- [x] **WWUI-05**: Event stream display showing last 50 events (scrollable)
+- [x] **WWUI-06**: Calibration wizard: Measure Background -> Record Wake Phrase -> Apply Suggestions
+- [x] **WWUI-07**: Calibration results grid showing ambient noise RMS, peak, suggested threshold, and wake phrase peak RMS
+- [x] **WWUI-08**: "Apply Suggestions" button with threshold display and "persist to .env" checkbox
+- [x] **WWUI-09**: Panel is collapsible, visually consistent with Audio Settings / MQTT / HA sections
+- [x] **WWUI-10**: JS module follows IIFE pattern, calls `WakeWordPanel.init()` on DOMContentLoaded
 
 ### Settings Persistence
 
@@ -128,16 +128,16 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | WWEB-07 | Phase 2 | Complete |
 | SETS-01 | Phase 2 | Complete |
 | SETS-02 | Phase 2 | Complete |
-| WWUI-01 | Phase 3 | Pending |
-| WWUI-02 | Phase 3 | Pending |
-| WWUI-03 | Phase 3 | Pending |
-| WWUI-04 | Phase 3 | Pending |
-| WWUI-05 | Phase 3 | Pending |
-| WWUI-06 | Phase 3 | Pending |
-| WWUI-07 | Phase 3 | Pending |
-| WWUI-08 | Phase 3 | Pending |
-| WWUI-09 | Phase 3 | Pending |
-| WWUI-10 | Phase 3 | Pending |
+| WWUI-01 | Phase 3 | Complete |
+| WWUI-02 | Phase 3 | Complete |
+| WWUI-03 | Phase 3 | Complete |
+| WWUI-04 | Phase 3 | Complete |
+| WWUI-05 | Phase 3 | Complete |
+| WWUI-06 | Phase 3 | Complete |
+| WWUI-07 | Phase 3 | Complete |
+| WWUI-08 | Phase 3 | Complete |
+| WWUI-09 | Phase 3 | Complete |
+| WWUI-10 | Phase 3 | Complete |
 
 **Coverage:**
 - v1 requirements: 28 total

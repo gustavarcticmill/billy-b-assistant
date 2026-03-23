@@ -65,7 +65,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 03-01-PLAN.md — HTML template and dashboard wiring: wake-word-panel.html, index/base/init.js integration (WWUI-01..10)
+- [x] 03-01-PLAN.md — HTML template and dashboard wiring: wake-word-panel.html, index/base/init.js integration (WWUI-01..10)
 - [ ] 03-02-PLAN.md — JavaScript IIFE module: status polling, toggle, buttons, event log, calibration wizard (WWUI-01, WWUI-04..10)
 
 ## Progress
