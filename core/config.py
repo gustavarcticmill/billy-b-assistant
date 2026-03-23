@@ -24,6 +24,69 @@ def _float_env(key: str, default: str) -> float:
         return float(default)
 
 
+def _int_env(
+    key: str,
+    default: str,
+    *,
+    min_val: int | None = None,
+    max_val: int | None = None,
+) -> int:
+    """Load an integer env var with optional range validation."""
+    value = os.getenv(key)
+    if value is None:
+        return int(default)
+    try:
+        result = int(value)
+    except (TypeError, ValueError):
+        print(
+            f"Warning: Invalid integer for {key}={value!r}, "
+            f"falling back to {default}",
+            flush=True,
+        )
+        return int(default)
+    if min_val is not None and result < min_val:
+        print(
+            f"Warning: {key}={result} below minimum {min_val}, "
+            f"falling back to {default}",
+            flush=True,
+        )
+        return int(default)
+    if max_val is not None and result > max_val:
+        print(
+            f"Warning: {key}={result} above maximum {max_val}, "
+            f"falling back to {default}",
+            flush=True,
+        )
+        return int(default)
+    return result
+
+
+def _float_env_ranged(
+    key: str,
+    default: str,
+    *,
+    min_val: float | None = None,
+    max_val: float | None = None,
+) -> float:
+    """Load a float env var with optional range validation."""
+    result = _float_env(key, default)
+    if min_val is not None and result < min_val:
+        print(
+            f"Warning: {key}={result} below minimum {min_val}, "
+            f"falling back to {default}",
+            flush=True,
+        )
+        return float(default)
+    if max_val is not None and result > max_val:
+        print(
+            f"Warning: {key}={result} above maximum {max_val}, "
+            f"falling back to {default}",
+            flush=True,
+        )
+        return float(default)
+    return result
+
+
 # === Paths ===
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENV_PATH = os.path.join(ROOT_DIR, ".env")
@@ -178,9 +241,9 @@ BILLY_PINS = os.getenv("BILLY_PINS", "new").strip().lower()
 # === Audio Config ===
 SPEAKER_PREFERENCE = os.getenv("SPEAKER_PREFERENCE")
 MIC_PREFERENCE = os.getenv("MIC_PREFERENCE")
-MIC_TIMEOUT_SECONDS = int(os.getenv("MIC_TIMEOUT_SECONDS", "5"))
-SILENCE_THRESHOLD = float(os.getenv("SILENCE_THRESHOLD", "1000"))
-CHUNK_MS = int(os.getenv("CHUNK_MS", "40"))
+MIC_TIMEOUT_SECONDS = _int_env("MIC_TIMEOUT_SECONDS", "5", min_val=1, max_val=300)
+SILENCE_THRESHOLD = _float_env_ranged("SILENCE_THRESHOLD", "1000", min_val=0.0)
+CHUNK_MS = _int_env("CHUNK_MS", "40", min_val=10, max_val=200)
 FOLLOW_UP_RETRY_LIMIT = int(os.getenv("FOLLOW_UP_RETRY_LIMIT", "1"))
 PLAYBACK_VOLUME = 1
 MOUTH_ARTICULATION = int(os.getenv("MOUTH_ARTICULATION", "5"))
@@ -212,8 +275,8 @@ SERVER_VAD_PARAMS = {
 
 # === Wake Word Config ===
 WAKE_WORD_ENABLED = os.getenv("WAKE_WORD_ENABLED", "false").lower() == "true"
-WAKE_WORD_SENSITIVITY = _float_env("WAKE_WORD_SENSITIVITY", "0.5")
-WAKE_WORD_THRESHOLD = _float_env("WAKE_WORD_THRESHOLD", "2400")
+WAKE_WORD_SENSITIVITY = _float_env_ranged("WAKE_WORD_SENSITIVITY", "0.5", min_val=0.0, max_val=1.0)
+WAKE_WORD_THRESHOLD = _float_env_ranged("WAKE_WORD_THRESHOLD", "2400", min_val=0.0)
 WAKE_WORD_ENDPOINT = os.getenv("WAKE_WORD_ENDPOINT", "").strip()
 WAKE_WORD_PORCUPINE_ACCESS_KEY = (
     os.getenv("WAKE_WORD_PORCUPINE_ACCESS_KEY")
@@ -245,7 +308,7 @@ ALLOW_UPDATE_PERSONALITY_INI = (
 )
 
 # === Software Config ===
-FLASK_PORT = int(os.getenv("FLASK_PORT", "80"))
+FLASK_PORT = _int_env("FLASK_PORT", "80", min_val=1, max_val=65535)
 SHOW_SUPPORT = os.getenv("SHOW_SUPPORT", True)
 FORCE_PASS_CHANGE = os.getenv("FORCE_PASS_CHANGE", "false").lower() == "true"
 SHOW_RC_VERSIONS = os.getenv("SHOW_RC_VERSIONS", "False")
