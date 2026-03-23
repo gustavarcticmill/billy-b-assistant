@@ -364,28 +364,29 @@ def play_random_wake_up_clip():
             if os.path.exists(persona_wakeup_dir):
                 clips = glob.glob(os.path.join(persona_wakeup_dir, "*.wav"))
                 if clips:
-                    print(f"🎭 Using wake-up clips from persona: {current_persona}")
+                    logger.info(f"Using wake-up clips from persona: {current_persona}", "🎭")
         elif current_persona == "default":
             # For default persona, use the custom folder
             clips = glob.glob(os.path.join(WAKE_UP_DIR, "*.wav"))
             if clips:
-                print("🔧 Using custom wake-up clips for default persona")
+                logger.info("Using custom wake-up clips for default persona", "🔊")
     except Exception as e:
-        print(f"⚠️ Failed to get current persona: {e}")
+        logger.warning(f"Failed to get current persona: {e}", "⚠️")
 
     # If no clips found yet, check custom folder as fallback
     if not clips:
         clips = glob.glob(os.path.join(WAKE_UP_DIR, "*.wav"))
         if clips:
-            print("🔧 Using custom wake-up clips (fallback)")
+            logger.info("Using custom wake-up clips (fallback)", "🔊")
 
     # If still no clips, fall back to default
     if not clips:
-        print("🔁 No custom clips found, falling back to default.")
+        logger.info("No custom clips found, falling back to default.", "🔁")
         clips = glob.glob(os.path.join(WAKE_UP_DIR_DEFAULT, "*.wav"))
 
     if not clips:
-        print("⚠️ No wake-up clips found in any directory.")
+        logger.warning("No wake-up clips found in any directory.", "⚠️")
+        playback_done_event.set()  # SRES-01: prevent mic start deadlock
         return None
 
     clip = random.choice(clips)
