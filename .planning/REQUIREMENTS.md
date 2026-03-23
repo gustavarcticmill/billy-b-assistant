@@ -9,15 +9,15 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Wake Word Integration
 
-- [ ] **WAKE-01**: Wake word detection triggers a conversation session identically to a button press (via `trigger_session_start("wake_word")`)
-- [ ] **WAKE-02**: `trigger_session_stop(source)` cleanly stops sessions from any source (hardware, wake_word, ui-test)
-- [ ] **WAKE-03**: `on_button()` delegates to `trigger_session_start("hardware")` and `trigger_session_stop("hardware")` instead of inline logic
-- [ ] **WAKE-04**: Wake word controller receives `notify_session_state(True/False)` on session start and end to pause/resume mic listening
-- [ ] **WAKE-05**: Wake word controller is initialized in `start_loop()` with config parameters and detection callback
-- [ ] **WAKE-06**: Audio feedback (wake-up sound) plays when wake word is detected, same as button press
-- [ ] **WAKE-07**: `button.is_pressed` guard does not block wake-word-sourced triggers
-- [ ] **WAKE-08**: Debounce logic works per-source (0.5s) preventing duplicate triggers
-- [ ] **WAKE-09**: Session cleanup/finally block calls `notify_session_state(False)` to re-enable wake word listening
+- [x] **WAKE-01**: Wake word detection triggers a conversation session identically to a button press (via `trigger_session_start("wake_word")`)
+- [x] **WAKE-02**: `trigger_session_stop(source)` cleanly stops sessions from any source (hardware, wake_word, ui-test)
+- [x] **WAKE-03**: `on_button()` delegates to `trigger_session_start("hardware")` and `trigger_session_stop("hardware")` instead of inline logic
+- [x] **WAKE-04**: Wake word controller receives `notify_session_state(True/False)` on session start and end to pause/resume mic listening
+- [x] **WAKE-05**: Wake word controller is initialized in `start_loop()` with config parameters and detection callback
+- [x] **WAKE-06**: Audio feedback (wake-up sound) plays when wake word is detected, same as button press
+- [x] **WAKE-07**: `button.is_pressed` guard does not block wake-word-sourced triggers
+- [x] **WAKE-08**: Debounce logic works per-source (0.5s) preventing duplicate triggers
+- [x] **WAKE-09**: Session cleanup/finally block calls `notify_session_state(False)` to re-enable wake word listening
 
 ### Wake Word Web Routes
 
@@ -65,7 +65,7 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Merge Breakage Fixes
 
-- [ ] **FIX-01**: Investigate and fix any other issues caused by upstream merge (to be catalogued during implementation)
+- [x] **FIX-01**: Investigate and fix any other issues caused by upstream merge (to be catalogued during implementation)
 
 ## v2 Requirements
 
@@ -102,15 +102,15 @@ Deferred to future milestone. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WAKE-01 | Phase 1 | Pending |
-| WAKE-02 | Phase 1 | Pending |
-| WAKE-03 | Phase 1 | Pending |
-| WAKE-04 | Phase 1 | Pending |
-| WAKE-05 | Phase 1 | Pending |
-| WAKE-06 | Phase 1 | Pending |
-| WAKE-07 | Phase 1 | Pending |
-| WAKE-08 | Phase 1 | Pending |
-| WAKE-09 | Phase 1 | Pending |
+| WAKE-01 | Phase 1 | Complete |
+| WAKE-02 | Phase 1 | Complete |
+| WAKE-03 | Phase 1 | Complete |
+| WAKE-04 | Phase 1 | Complete |
+| WAKE-05 | Phase 1 | Complete |
+| WAKE-06 | Phase 1 | Complete |
+| WAKE-07 | Phase 1 | Complete |
+| WAKE-08 | Phase 1 | Complete |
+| WAKE-09 | Phase 1 | Complete |
 | SRES-01 | Phase 1 | Complete |
 | SRES-02 | Phase 1 | Complete |
 | SRES-03 | Phase 1 | Complete |
@@ -118,7 +118,7 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | HARE-02 | Phase 1 | Complete |
 | CONF-01 | Phase 1 | Complete |
 | CONF-02 | Phase 1 | Complete |
-| FIX-01 | Phase 1 | Pending |
+| FIX-01 | Phase 1 | Complete |
 | WWEB-01 | Phase 2 | Pending |
 | WWEB-02 | Phase 2 | Pending |
 | WWEB-03 | Phase 2 | Pending |
