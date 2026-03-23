@@ -148,6 +148,30 @@ def get_base_tools() -> list[dict[str, Any]]:
                 "required": ["category"],
             },
         },
+        {
+            "name": "get_weather",
+            "type": "function",
+            "description": "Get current weather conditions for the configured location. Returns temperature, wind speed, and weather code. Use when the user asks about weather, temperature, or outdoor conditions.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+            },
+        },
+        {
+            "name": "web_search",
+            "type": "function",
+            "description": "Search the web for current information using DuckDuckGo. Use when the user asks about facts, events, people, or anything that requires up-to-date information beyond your training data.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The search query",
+                    },
+                },
+                "required": ["query"],
+            },
+        },
     ]
 
 

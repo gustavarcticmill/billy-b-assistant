@@ -190,7 +190,10 @@ class WakeWordController:
             )
         except Exception as exc:  # noqa: BLE001 we want to log and keep running
             self._last_error = str(exc)
-            self.enabled = False
+            # Don't set self.enabled = False here — a transient ALSA error
+            # (e.g., device briefly busy after session) should not permanently
+            # disable wake word detection.  The next notify_session_state(False)
+            # or manual enable() call will retry via _sync_stream_state().
             self._running = False
             self._stream = None
             self._publish_event("error", message=str(exc))
@@ -211,8 +214,21 @@ class WakeWordController:
             self._running = False
             self._publish_event("status", message="listener_stopped")
             self._input_samplerate = None
+            # Free Porcupine native memory when stream closes
+            if self._porcupine is not None:
+                try:
+                    self._porcupine.delete()
+                except Exception:
+                    pass
+                self._porcupine = None
 
     def _prepare_engine(self) -> None:
+        # Clean up previous Porcupine instance to free native memory
+        if self._porcupine is not None:
+            try:
+                self._porcupine.delete()
+            except Exception:
+                pass
         self._detector_mode = "rms"
         self._porcupine = None
         self._porcupine_buffer = np.zeros(0, dtype=np.int16)

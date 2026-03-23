@@ -441,8 +441,8 @@
                     </div>
                     <select id="WAKE_WORD_ENABLED" name="WAKE_WORD_ENABLED"
                             class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
-                        <option value="false" {{ 'selected' if config.get('WAKE_WORD_ENABLED', 'false') == 'false' else '' }}>Disabled</option>
-                        <option value="true" {{ 'selected' if config.get('WAKE_WORD_ENABLED', 'false') == 'true' else '' }}>Enabled</option>
+                        <option value="false" {{ 'selected' if config.get('WAKE_WORD_ENABLED', 'false')|lower == 'false' else '' }}>Disabled</option>
+                        <option value="true" {{ 'selected' if config.get('WAKE_WORD_ENABLED', 'false')|lower == 'true' else '' }}>Enabled</option>
                     </select>
                 </div>
             </div>
@@ -638,7 +638,7 @@
                 <label for="HA_LANG" class="block font-semibold text-sm text-slate-300 mb-1">Language
                 </label>
                 {% set ha_languages = [
-                ('EN', 'English'), ('NL', 'Dutch'), ('IT', 'Italian'), ('FR', 'French'),
+                ('EN', 'English'), ('SV', 'Svenska'), ('NL', 'Dutch'), ('IT', 'Italian'), ('FR', 'French'),
                 ('DE', 'German'), ('ES', 'Spanish'), ('PT', 'Portuguese'), ('HI', 'Hindi'),
                 ('JA', 'Japanese'), ('ZH', 'Chinese'), ('KO', 'Korean'), ('RU', 'Russian'),
                 ('PL', 'Polish'), ('CS', 'Czech'), ('TR', 'Turkish'), ('RO', 'Romanian'),

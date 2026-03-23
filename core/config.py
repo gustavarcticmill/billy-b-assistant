@@ -118,7 +118,7 @@ NEVER speak or print tool calls out loud. Do NOT include text like
 PERSONALITY: Use update_personality when users request changes (e.g., "be funnier" -> update_personality({"humor": 80}))
 
 SMART HOME: Only call smart_home_command for DIRECT commands ("turn on lights"). If asked to "ask if" or "check if", just speak the question.
-NEWS: Use get_news_digest for headlines, weather, and sports updates. Team/location are OPTIONAL inputs. If missing, call the tool anyway with available context and configured sources first; only ask a follow-up if the tool response still lacks enough information. IMPORTANT: for headlines, always set a concise `subject` based on user intent (use keyword-style labels like "technology", "sports", "project updates", "weather", "finance") so source keywords are used during source selection. Also set `query` when user asks about a specific topic/person/event. BEFORE calling the news tool, acknowledge VERY briefly (max 2 words), preferably exactly: "Checking."
+NEWS: When the user asks for news, headlines, or updates, you MUST call get_news_digest. Do NOT just say you will check — actually call the tool. Set category="headlines" and a concise subject keyword. Do NOT call conversation_state before the tool returns. Call the tool FIRST, wait for results, THEN speak.
 
 USER SYSTEM:
 - identify_user: Call when someone introduces themselves ("I am Tom")
@@ -130,6 +130,12 @@ SONGS: Use play_song for special songs
 WEB SEARCH: When the user needs live information from the web, use the web_search tool with their exact question.
 
 WEATHER: When the user asks about the weather, use the get_weather tool to retrieve the latest conditions.
+
+=== STOP COMMAND ===
+If the user says "Stop Billy" (or close variations like "stopp Billy", "sluta Billy"), IMMEDIATELY:
+1. Say a very brief goodbye (max 3 words, e.g., "Hejdå!" or "Okej, hejdå!")
+2. Call conversation_state(expects_follow_up=false)
+Do NOT continue the conversation. Do NOT ask follow-up questions. End instantly.
 
 === RESPONSE FLOW ===
 1. [Optional: call tool functions]
@@ -149,7 +155,7 @@ TOOL_INSTRUCTIONS_NO_CONVERSATION_STATE = """
 PERSONALITY: Use update_personality when users request changes (e.g., "be funnier" -> update_personality({"humor": 80}))
 
 SMART HOME: Only call smart_home_command for DIRECT commands ("turn on lights"). If asked to "ask if" or "check if", just speak the question.
-NEWS: Use get_news_digest for headlines, weather, and sports updates. Team/location are OPTIONAL inputs. If missing, call the tool anyway with available context and configured sources first; only ask a follow-up if the tool response still lacks enough information. IMPORTANT: for headlines, always set a concise `subject` based on user intent (use keyword-style labels like "technology", "sports", "project updates", "weather", "finance") so source keywords are used during source selection. Also set `query` when user asks about a specific topic/person/event. BEFORE calling the news tool, acknowledge VERY briefly (max 2 words), preferably exactly: "Checking."
+NEWS: When the user asks for news, headlines, or updates, you MUST call get_news_digest. Do NOT just say you will check — actually call the tool. Set category="headlines" and a concise subject keyword. Do NOT call conversation_state before the tool returns. Call the tool FIRST, wait for results, THEN speak.
 
 USER SYSTEM:
 - identify_user: Call when someone introduces themselves ("I am Tom")
@@ -161,6 +167,12 @@ SONGS: Use play_song for special songs
 WEB SEARCH: When the user needs live information from the web, use the web_search tool with their exact question.
 
 WEATHER: When the user asks about the weather, use the get_weather tool to retrieve the latest conditions.
+
+=== STOP COMMAND ===
+If the user says "Stop Billy" (or close variations like "stopp Billy", "sluta Billy"), IMMEDIATELY:
+1. Say a very brief goodbye (max 3 words, e.g., "Hejdå!" or "Okej, hejdå!")
+2. End the conversation immediately.
+Do NOT continue the conversation. Do NOT ask follow-up questions. End instantly.
 
 === RESPONSE FLOW ===
 1. [Optional: call tool functions]
@@ -182,6 +194,24 @@ else:
         "that."
     )
 
+_LANG_CODE = os.getenv("HA_LANG", "EN").strip().upper()
+_LANG_DIRECTIVE = ""
+if _LANG_CODE != "EN":
+    _LANG_NAMES = {
+        "SV": "Swedish", "NL": "Dutch", "IT": "Italian", "FR": "French",
+        "DE": "German", "ES": "Spanish", "PT": "Portuguese", "HI": "Hindi",
+        "JA": "Japanese", "ZH": "Chinese", "KO": "Korean", "RU": "Russian",
+        "PL": "Polish", "CS": "Czech", "TR": "Turkish", "RO": "Romanian",
+    }
+    _lang_name = _LANG_NAMES.get(_LANG_CODE, _LANG_CODE)
+    _LANG_DIRECTIVE = (
+        f"\n---\n# Language\n"
+        f"ALWAYS respond in {_lang_name}. The user's primary language is {_lang_name}. "
+        f"All spoken output, confirmations, weather summaries, news briefings, "
+        f"and error messages MUST be in {_lang_name}. "
+        f"Tool results may arrive in English — translate them to {_lang_name} before speaking."
+    )
+
 INSTRUCTIONS = f"""
 # Role & Objective
 {CUSTOM_INSTRUCTIONS.strip()}
@@ -195,6 +225,7 @@ INSTRUCTIONS = f"""
 # Context (backstory)
 Use your backstory to inspire jokes, metaphors, or occasional references in conversation, staying consistent with your personality.
 {BACKSTORY_FACTS}
+{_LANG_DIRECTIVE}
 """.strip()
 
 # === OpenAI Config ===

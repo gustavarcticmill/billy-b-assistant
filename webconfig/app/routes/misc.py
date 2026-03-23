@@ -354,6 +354,7 @@ def test_motor():
 
         if was_active:
             subprocess.check_call(["sudo", "systemctl", "stop", "billy.service"])
+            time.sleep(1)  # Wait for service to fully release GPIO
 
         data = request.get_json()
         motor = data.get("motor")
@@ -372,6 +373,19 @@ def test_motor():
         else:
             return jsonify({"error": "Invalid motor"}), 400
 
+        # Release GPIO pins so billy.service can reclaim them
+        movements.cleanup_gpio()
+
+        # Restart billy.service if it was running before the test
+        if was_active:
+            subprocess.Popen(["sudo", "systemctl", "start", "billy.service"])
+
         return jsonify({"status": f"{motor} tested", "service_was_active": was_active})
     except Exception as e:
+        # Best-effort GPIO cleanup on error
+        try:
+            import core.movements as movements
+            movements.cleanup_gpio()
+        except Exception:
+            pass
         return jsonify({"error": str(e)}), 500

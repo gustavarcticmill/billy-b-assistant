@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "sources": [
+    {
+      "id": "google-top-sv",
+      "name": "Google Nyheter (Toppnyheter)",
+      "url": "https://news.google.com/rss?hl=sv&gl=SE&ceid=SE:sv",
+      "topics": [
+        "general"
+      ]
+    },
+    {
+      "id": "google-search-sv",
+      "name": "Google Nyheter (Sök)",
+      "url": "https://news.google.com/rss/search?q={{query}}&hl=sv&gl=SE&ceid=SE:sv",
+      "topics": [
+        "general"
+      ]
+    }
+  ]
+}

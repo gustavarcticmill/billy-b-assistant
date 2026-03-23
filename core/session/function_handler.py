@@ -11,6 +11,8 @@ from ..logger import logger
 from ..news_digest import get_news_digest
 from ..persona import update_persona_ini
 from ..persona_manager import persona_manager
+from ..search import web_search_summary
+from ..weather import fetch_current_weather
 
 
 class FunctionHandler:
@@ -33,6 +35,8 @@ class FunctionHandler:
             "manage_profile": self._handle_manage_profile,
             "switch_persona": self._handle_switch_persona,
             "get_news_digest": self._handle_get_news_digest,
+            "get_weather": self._handle_get_weather,
+            "web_search": self._handle_web_search,
         }
 
         handler = handlers.get(function_name)
@@ -364,6 +368,79 @@ class FunctionHandler:
                 "type": "message",
                 "role": "user",
                 "content": [{"type": "input_text", "text": prompt}],
+            },
+        })
+        self.session.state._triggered_new_response = True
+        await self.session._ws_send_json({"type": "response.create"})
+
+    async def _handle_get_weather(
+        self, raw_args: str | None, call_id: str | None = None
+    ):
+        """Handle weather lookup via Open-Meteo."""
+        logger.info("Fetching weather...", "🌤️")
+        result = await fetch_current_weather()
+
+        if call_id:
+            await self.session._ws_send_json({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": json.dumps({"weather": result}),
+                },
+            })
+            await asyncio.sleep(0.1)
+
+        await self.session._ws_send_json({
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": f"Weather tool returned: {result}. Relay this to the user naturally.",
+                    }
+                ],
+            },
+        })
+        self.session.state._triggered_new_response = True
+        await self.session._ws_send_json({"type": "response.create"})
+
+    async def _handle_web_search(
+        self, raw_args: str | None, call_id: str | None = None
+    ):
+        """Handle web search via DuckDuckGo."""
+        args = self._parse_json_args(raw_args, "web_search")
+        query = args.get("query", "")
+        if not query:
+            return
+
+        logger.info(f"Web search: {query}", "🔍")
+        result = await web_search_summary(query)
+
+        if call_id:
+            await self.session._ws_send_json({
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": json.dumps({"results": result}),
+                },
+            })
+            await asyncio.sleep(0.1)
+
+        await self.session._ws_send_json({
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": f"Web search results for '{query}': {result}. Summarize this for the user.",
+                    }
+                ],
             },
         })
         self.session.state._triggered_new_response = True

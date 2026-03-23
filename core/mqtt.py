@@ -361,11 +361,12 @@ def on_message(client, userdata, msg):
         from .say import say
 
         try:
-            text = msg.payload.decode().strip()
+            raw_text = msg.payload.decode().strip()
+            text, interactive = _parse_say_payload(raw_text)
             if text:
 
                 def run_say():
-                    asyncio.run(say(text=text))  # interactive=None -> AUTO follow-up
+                    asyncio.run(say(text=text, interactive=interactive))
 
                 threading.Thread(target=run_say, daemon=True).start()
             else:
