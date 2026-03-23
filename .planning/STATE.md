@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 01-01-PLAN.md
-last_updated: "2026-03-23T11:54:37.309Z"
+stopped_at: Completed 01-02-PLAN.md
+last_updated: "2026-03-23T11:57:40.390Z"
 progress:
   total_phases: 3
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-24)
 ## Current Position
 
 Phase: 01 (core-integration) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -47,6 +47,7 @@ Plan: 2 of 3
 
 *Updated after each plan completion*
 | Phase 01 P01 | 2min | 1 tasks | 1 files |
+| Phase 01 P02 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -60,6 +61,8 @@ Recent decisions affecting current work:
 - [Init]: Wake word routes implemented as separate blueprint following upstream pattern
 - [Phase 01]: Used print() for config warnings (config.py loads before logger)
 - [Phase 01]: _float_env_ranged wraps _float_env to avoid duplicating parse logic
+- [Phase 01]: Used asyncio.create_task for dead WS teardown to avoid ws_lock deadlock in send path
+- [Phase 01]: HA availability cache TTL set to 30s (balances recovery speed vs timeout waste)
 
 ### Pending Todos
 
@@ -72,6 +75,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-23T11:54:37.283Z
-Stopped at: Completed 01-01-PLAN.md
+Last session: 2026-03-23T11:57:40.359Z
+Stopped at: Completed 01-02-PLAN.md
 Resume file: None

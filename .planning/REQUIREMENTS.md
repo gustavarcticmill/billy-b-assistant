@@ -49,14 +49,14 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Session Resilience
 
-- [ ] **SRES-01**: `play_random_wake_up_clip()` sets `playback_done_event` even when no clips found, preventing mic start deadlock
-- [ ] **SRES-02**: Dead websocket detected after repeated send timeouts, triggers session teardown instead of silent failure
-- [ ] **SRES-03**: Mic timeout checker verifies session isn't already stopping before calling `stop_session()`, preventing double-stop race condition
+- [x] **SRES-01**: `play_random_wake_up_clip()` sets `playback_done_event` even when no clips found, preventing mic start deadlock
+- [x] **SRES-02**: Dead websocket detected after repeated send timeouts, triggers session teardown instead of silent failure
+- [x] **SRES-03**: Mic timeout checker verifies session isn't already stopping before calling `stop_session()`, preventing double-stop race condition
 
 ### Home Assistant Resilience
 
-- [ ] **HARE-01**: `send_conversation_prompt()` has explicit timeout (5 seconds) preventing indefinite hangs
-- [ ] **HARE-02**: HA availability cached with TTL — fail fast if HA known to be down instead of blocking session
+- [x] **HARE-01**: `send_conversation_prompt()` has explicit timeout (5 seconds) preventing indefinite hangs
+- [x] **HARE-02**: HA availability cached with TTL — fail fast if HA known to be down instead of blocking session
 
 ### Config Validation
 
@@ -111,11 +111,11 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | WAKE-07 | Phase 1 | Pending |
 | WAKE-08 | Phase 1 | Pending |
 | WAKE-09 | Phase 1 | Pending |
-| SRES-01 | Phase 1 | Pending |
-| SRES-02 | Phase 1 | Pending |
-| SRES-03 | Phase 1 | Pending |
-| HARE-01 | Phase 1 | Pending |
-| HARE-02 | Phase 1 | Pending |
+| SRES-01 | Phase 1 | Complete |
+| SRES-02 | Phase 1 | Complete |
+| SRES-03 | Phase 1 | Complete |
+| HARE-01 | Phase 1 | Complete |
+| HARE-02 | Phase 1 | Complete |
 | CONF-01 | Phase 1 | Complete |
 | CONF-02 | Phase 1 | Complete |
 | FIX-01 | Phase 1 | Pending |
