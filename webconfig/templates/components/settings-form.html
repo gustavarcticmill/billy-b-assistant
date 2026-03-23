@@ -417,6 +417,127 @@
 
         </div>
 
+        <!-- Wake Word Settings -->
+        <div class="bg-zinc-900/50 backdrop-blur-xs border border-zinc-700 p-4 rounded-lg shadow-lg mb-4 collapsible-section"
+             id="section-wake-word">
+            <h3 class="flex items-center gap-2 cursor-pointer group text-lg grow justify-between font-bold mb-4 text-slate-200 hover:text-emerald-400 transition-colors">
+                <span class="material-icons text-white group-hover:text-emerald-400 transition-colors">hearing</span>
+                Wake Word Settings
+                <span class="material-icons transition-transform duration-200 ml-2 rotate-0 group-hover:text-emerald-400">expand_more</span>
+            </h3>
+
+            <!-- Enable/Disable Toggle (full width select) -->
+            <div class="mb-4">
+                <label for="WAKE_WORD_ENABLED"
+                       class="flex justify-between items-center font-semibold text-sm text-slate-300 relative">
+                    Enable Wake Word Detection
+                    <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
+                          onclick="toggleTooltip(this)">help_outline</span>
+                </label>
+                <div class="relative">
+                    <div data-tooltip>
+                        When enabled, Billy listens for the wake word and starts a conversation
+                        session hands-free. Disable to use button-only mode.
+                    </div>
+                    <select id="WAKE_WORD_ENABLED" name="WAKE_WORD_ENABLED"
+                            class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500">
+                        <option value="false" {{ 'selected' if config.get('WAKE_WORD_ENABLED', 'false') == 'false' else '' }}>Disabled</option>
+                        <option value="true" {{ 'selected' if config.get('WAKE_WORD_ENABLED', 'false') == 'true' else '' }}>Enabled</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Sensitivity + RMS Threshold (side by side, matches Mic Timeout + Silence Threshold pattern) -->
+            <div class="flex mb-4 gap-4">
+                <div class="flex-1/2 flex flex-col justify-between">
+                    <label for="WAKE_WORD_SENSITIVITY"
+                           class="flex justify-between items-center font-semibold text-sm text-slate-300">
+                        Sensitivity (0.0 - 1.0)
+                        <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
+                              onclick="toggleTooltip(this)">help_outline</span>
+                    </label>
+                    <div class="relative">
+                        <div data-tooltip>
+                            How sensitive the wake word engine is to detections. Higher values
+                            catch more utterances but may produce false positives. Default: 0.5
+                        </div>
+                        <input type="number" step="0.05" min="0.0" max="1.0"
+                               id="WAKE_WORD_SENSITIVITY" name="WAKE_WORD_SENSITIVITY"
+                               class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                               value="{{ config.get('WAKE_WORD_SENSITIVITY', '0.5') }}">
+                    </div>
+                </div>
+
+                <div class="flex-1/2 flex flex-col justify-between">
+                    <label for="WAKE_WORD_THRESHOLD"
+                           class="flex justify-between items-center font-semibold text-sm text-slate-300">
+                        RMS Threshold (0 - 32768)
+                        <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
+                              onclick="toggleTooltip(this)">help_outline</span>
+                    </label>
+                    <div class="relative">
+                        <div data-tooltip>
+                            Minimum audio RMS level to consider as speech. Use the calibration
+                            tool in the Wake Word panel to find the right value for your
+                            environment. Default: 1000
+                        </div>
+                        <input type="number" step="1" min="0" max="32768"
+                               id="WAKE_WORD_THRESHOLD" name="WAKE_WORD_THRESHOLD"
+                               class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                               value="{{ config.get('WAKE_WORD_THRESHOLD', '2400') }}">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Endpoint Path (full width) -->
+            <div class="mb-4">
+                <label for="WAKE_WORD_ENDPOINT"
+                       class="flex justify-between items-center font-semibold text-sm text-slate-300 relative">
+                    Porcupine Endpoint Path
+                    <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
+                          onclick="toggleTooltip(this)">help_outline</span>
+                </label>
+                <div class="relative">
+                    <div data-tooltip>
+                        Path to a custom Porcupine .ppn endpoint file. Leave empty to use the
+                        built-in "Porcupine" keyword.
+                    </div>
+                    <input id="WAKE_WORD_ENDPOINT" name="WAKE_WORD_ENDPOINT" type="text"
+                           class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                           value="{{ config.get('WAKE_WORD_ENDPOINT', '') }}">
+                </div>
+            </div>
+
+            <!-- Access Key (password field with visibility toggle) -->
+            <div class="mb-4">
+                <label for="WAKE_WORD_PORCUPINE_ACCESS_KEY"
+                       class="flex justify-between items-center font-semibold text-sm text-slate-300 relative">
+                    Porcupine Access Key
+                    <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
+                          onclick="toggleTooltip(this)">help_outline</span>
+                </label>
+                <div class="relative">
+                    <div data-tooltip>
+                        Your Picovoice Console access key. Required for Porcupine wake word
+                        detection. Get one free at
+                        <a href="https://console.picovoice.ai/"
+                           class="underline hover:text-cyan-400" target="_blank">console.picovoice.ai</a>
+                    </div>
+                    <input id="WAKE_WORD_PORCUPINE_ACCESS_KEY" name="WAKE_WORD_PORCUPINE_ACCESS_KEY"
+                           type="password"
+                           class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                           value="{{ config.get('WAKE_WORD_PORCUPINE_ACCESS_KEY', '') }}">
+                    <button type="button"
+                            onclick="toggleInputVisibility('WAKE_WORD_PORCUPINE_ACCESS_KEY', this)"
+                            aria-label="Show password"
+                            class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white cursor-pointer">
+                        <span class="material-icons" id="WAKE_WORD_PORCUPINE_ACCESS_KEY_icon">visibility</span>
+                    </button>
+                </div>
+            </div>
+
+        </div>
+
         <!-- MQTT Settings -->
         <div class="bg-zinc-900/50 backdrop-blur-xs border border-zinc-700 p-4 rounded-lg shadow-lg mb-4 collapsible-section"
              id="section-mqtt">
