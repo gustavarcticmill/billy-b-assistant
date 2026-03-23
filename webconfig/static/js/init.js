@@ -74,6 +74,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (window.UserProfilePanel && window.UserProfilePanel.bindUI) {
             window.UserProfilePanel.bindUI();
         }
+    if (typeof WakeWordPanel !== 'undefined') {
+        WakeWordPanel.init();
+    }
     Sections.collapsible();
     ReleaseNotes.init();
     SongsManager.init();
