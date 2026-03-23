@@ -35,13 +35,14 @@ Declared values (must be multiples of 4):
 |-------|-------|-------|
 | xs | 4px | Icon gaps, inline padding |
 | sm | 8px | Compact element spacing, gap-2 |
+| input | 12px | Input inner padding (p-3) |
 | md | 16px | Default element spacing, p-4 |
 | lg | 24px | Section padding, p-6 |
 | xl | 32px | Layout gaps |
 | 2xl | 48px | Major section breaks |
 | 3xl | 64px | Page-level spacing |
 
-Exceptions: none
+Exceptions: 12px (`p-3`) is not in the standard 8-point scale but is included because it matches the established codebase input pattern -- 54 occurrences across 8 template files (32 in settings-form.html alone). Changing to `p-4` would break visual consistency with all existing form inputs.
 
 Source: Matches existing patterns in settings-form.html (`p-4` on section containers, `p-3` on inputs, `gap-2`/`gap-4` between elements, `mb-4` between form groups).
 
@@ -52,11 +53,15 @@ Source: Matches existing patterns in settings-form.html (`p-4` on section contai
 | Role | Size | Weight | Line Height | Tailwind Class |
 |------|------|--------|-------------|----------------|
 | Body | 14px | 400 (normal) | 1.5 | `text-sm` |
-| Label | 14px | 600 (semibold) | 1.5 | `text-sm font-semibold` |
+| Label | 14px | 700 (bold) | 1.5 | `text-sm font-bold` |
 | Section Heading | 18px | 700 (bold) | 1.2 | `text-lg font-bold` |
 | Tooltip | 12px | 400 (normal) | 1.5 | `text-xs` |
 
-Source: Detected from settings-form.html — labels use `font-semibold text-sm text-slate-300`, section headings use `text-lg font-bold text-slate-200`, tooltips use `text-xs`.
+Weights used: 400 (normal), 700 (bold) -- 2 weights total.
+
+Note: Labels previously used `font-semibold` (600) but are consolidated to `font-bold` (700) to stay within the 2-weight maximum. Labels and section headings now share the bold weight, differentiated by size (14px vs 18px).
+
+Source: Detected from settings-form.html -- labels use `text-sm text-slate-300`, section headings use `text-lg font-bold text-slate-200`, tooltips use `text-xs`.
 
 ---
 
@@ -99,7 +104,7 @@ Source: Detected from input.css (`#22d3ee` = cyan-400 for sliders, `#34d399` = e
 ### Text Input
 ```html
 <div class="mb-4">
-    <label for="{ID}" class="block font-semibold text-sm text-slate-300">{Label}</label>
+    <label for="{ID}" class="block font-bold text-sm text-slate-300">{Label}</label>
     <input id="{ID}" name="{ID}" type="text"
            class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
            value="{{ config.get('{KEY}', '') }}">
@@ -109,12 +114,13 @@ Source: Detected from input.css (`#22d3ee` = cyan-400 for sliders, `#34d399` = e
 ### Password Input (with visibility toggle)
 ```html
 <div class="mb-4">
-    <label for="{ID}" class="block font-semibold text-sm text-slate-300">{Label}</label>
+    <label for="{ID}" class="block font-bold text-sm text-slate-300">{Label}</label>
     <div class="relative">
         <input id="{ID}" name="{ID}" type="password"
                class="w-full p-3 mt-1 pr-10 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
                value="{{ config.get('{KEY}', '') }}">
         <button type="button" onclick="toggleInputVisibility('{ID}', this)"
+                aria-label="Show password"
                 class="absolute inset-y-0 right-0 flex items-center px-2 text-slate-400 hover:text-white cursor-pointer">
             <span class="material-icons" id="{ID}_icon">visibility</span>
         </button>
@@ -122,9 +128,11 @@ Source: Detected from input.css (`#22d3ee` = cyan-400 for sliders, `#34d399` = e
 </div>
 ```
 
+Note: The `toggleInputVisibility()` function must update `aria-label` to "Hide password" when the input type changes to text, and back to "Show password" when it changes to password.
+
 ### Label with Tooltip
 ```html
-<label for="{ID}" class="flex justify-between items-center font-semibold text-sm text-slate-300 relative">
+<label for="{ID}" class="flex justify-between items-center font-bold text-sm text-slate-300 relative">
     {Label Text}
     <span class="material-icons align-middle hover:text-cyan-400 cursor-pointer ml-1"
           onclick="toggleTooltip(this)">help_outline</span>
@@ -139,7 +147,7 @@ Source: Detected from input.css (`#22d3ee` = cyan-400 for sliders, `#34d399` = e
 ```html
 <div class="flex mb-4 gap-4">
     <div class="flex-1/2 flex flex-col justify-between">
-        <label for="{ID}" class="flex justify-between items-center font-semibold text-sm text-slate-300">{Label}</label>
+        <label for="{ID}" class="flex justify-between items-center font-bold text-sm text-slate-300">{Label}</label>
         <input type="number" step="{step}" min="{min}" max="{max}" id="{ID}" name="{ID}"
                class="w-full p-3 mt-1 bg-zinc-800 text-white rounded focus:outline-none focus:ring-2 focus:ring-cyan-500"
                value="{{ config.get('{KEY}', '{default}') }}">
