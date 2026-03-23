@@ -31,7 +31,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans:** 3 plans
 
 Plans:
-- [ ] 01-01-PLAN.md — Config validation: range-checked helpers for numeric env vars (CONF-01, CONF-02)
+- [x] 01-01-PLAN.md — Config validation: range-checked helpers for numeric env vars (CONF-01, CONF-02)
 - [ ] 01-02-PLAN.md — Resilience fixes: playback deadlock, dead websocket, double-stop, HA timeout/cache (SRES-01..03, HARE-01..02)
 - [ ] 01-03-PLAN.md — Trigger abstraction and wake word wiring: core/trigger.py, button.py refactor, start_loop init (WAKE-01..09, FIX-01)
 

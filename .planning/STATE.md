@@ -2,16 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: planning
-stopped_at: Phase 1 context gathered
-last_updated: "2026-03-23T11:21:21.601Z"
-last_activity: 2026-03-24 — Roadmap created, ready to begin Phase 1 planning
+status: Ready to execute
+stopped_at: Completed 01-01-PLAN.md
+last_updated: "2026-03-23T11:54:37.309Z"
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 3
+  completed_plans: 1
 ---
 
 # Project State
@@ -21,16 +19,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-03-24)
 
 **Core value:** The fish responds to voice — both button press and hands-free wake word activation — routing queries intelligently between Claude and Home Assistant.
-**Current focus:** Phase 1 — Core Integration
+**Current focus:** Phase 01 — core-integration
 
 ## Current Position
 
-Phase: 1 of 3 (Core Integration)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-03-24 — Roadmap created, ready to begin Phase 1 planning
-
-Progress: [░░░░░░░░░░] 0%
+Phase: 01 (core-integration) — EXECUTING
+Plan: 2 of 3
 
 ## Performance Metrics
 
@@ -52,6 +46,7 @@ Progress: [░░░░░░░░░░] 0%
 - Trend: -
 
 *Updated after each plan completion*
+| Phase 01 P01 | 2min | 1 tasks | 1 files |
 
 ## Accumulated Context
 
@@ -63,6 +58,8 @@ Recent decisions affecting current work:
 - [Init]: trigger_session_start/stop abstraction added to button.py (multi-source trigger support)
 - [Init]: core/hotword.py must not be modified — integrate through its public interface only
 - [Init]: Wake word routes implemented as separate blueprint following upstream pattern
+- [Phase 01]: Used print() for config warnings (config.py loads before logger)
+- [Phase 01]: _float_env_ranged wraps _float_env to avoid duplicating parse logic
 
 ### Pending Todos
 
@@ -75,6 +72,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-23T11:21:21.578Z
-Stopped at: Phase 1 context gathered
-Resume file: .planning/phases/01-core-integration/01-CONTEXT.md
+Last session: 2026-03-23T11:54:37.283Z
+Stopped at: Completed 01-01-PLAN.md
+Resume file: None

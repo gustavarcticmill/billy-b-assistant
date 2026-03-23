@@ -60,8 +60,8 @@ Requirements for this milestone. Each maps to roadmap phases.
 
 ### Config Validation
 
-- [ ] **CONF-01**: Numeric config values validated for sane ranges (MIC_TIMEOUT_SECONDS 1-300, FLASK_PORT 1-65535, thresholds non-negative)
-- [ ] **CONF-02**: Invalid config values log a warning and fall back to sensible defaults instead of silently misbehaving
+- [x] **CONF-01**: Numeric config values validated for sane ranges (MIC_TIMEOUT_SECONDS 1-300, FLASK_PORT 1-65535, thresholds non-negative)
+- [x] **CONF-02**: Invalid config values log a warning and fall back to sensible defaults instead of silently misbehaving
 
 ### Merge Breakage Fixes
 
@@ -116,8 +116,8 @@ Deferred to future milestone. Tracked but not in current roadmap.
 | SRES-03 | Phase 1 | Pending |
 | HARE-01 | Phase 1 | Pending |
 | HARE-02 | Phase 1 | Pending |
-| CONF-01 | Phase 1 | Pending |
-| CONF-02 | Phase 1 | Pending |
+| CONF-01 | Phase 1 | Complete |
+| CONF-02 | Phase 1 | Complete |
 | FIX-01 | Phase 1 | Pending |
 | WWEB-01 | Phase 2 | Pending |
 | WWEB-02 | Phase 2 | Pending |
