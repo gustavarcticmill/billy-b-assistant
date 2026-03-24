@@ -102,13 +102,48 @@ Deferred to future milestone. Tracked but not in current roadmap.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| *(populated during roadmap creation)* | | |
+| WAKE-01 | Phase 1 | Pending |
+| WAKE-02 | Phase 1 | Pending |
+| WAKE-03 | Phase 1 | Pending |
+| WAKE-04 | Phase 1 | Pending |
+| WAKE-05 | Phase 1 | Pending |
+| WAKE-06 | Phase 1 | Pending |
+| WAKE-07 | Phase 1 | Pending |
+| WAKE-08 | Phase 1 | Pending |
+| WAKE-09 | Phase 1 | Pending |
+| SRES-01 | Phase 1 | Pending |
+| SRES-02 | Phase 1 | Pending |
+| SRES-03 | Phase 1 | Pending |
+| HARE-01 | Phase 1 | Pending |
+| HARE-02 | Phase 1 | Pending |
+| CONF-01 | Phase 1 | Pending |
+| CONF-02 | Phase 1 | Pending |
+| FIX-01 | Phase 1 | Pending |
+| WWEB-01 | Phase 2 | Pending |
+| WWEB-02 | Phase 2 | Pending |
+| WWEB-03 | Phase 2 | Pending |
+| WWEB-04 | Phase 2 | Pending |
+| WWEB-05 | Phase 2 | Pending |
+| WWEB-06 | Phase 2 | Pending |
+| WWEB-07 | Phase 2 | Pending |
+| SETS-01 | Phase 2 | Pending |
+| SETS-02 | Phase 2 | Pending |
+| WWUI-01 | Phase 3 | Pending |
+| WWUI-02 | Phase 3 | Pending |
+| WWUI-03 | Phase 3 | Pending |
+| WWUI-04 | Phase 3 | Pending |
+| WWUI-05 | Phase 3 | Pending |
+| WWUI-06 | Phase 3 | Pending |
+| WWUI-07 | Phase 3 | Pending |
+| WWUI-08 | Phase 3 | Pending |
+| WWUI-09 | Phase 3 | Pending |
+| WWUI-10 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 28 total
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 28
+- Mapped to phases: 28
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-24*
-*Last updated: 2026-03-24 after initial definition*
+*Last updated: 2026-03-24 after roadmap creation*
